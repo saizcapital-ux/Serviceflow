@@ -1,0 +1,48 @@
+"""ORM models. Importing this package registers every table on Base.metadata."""
+from app.models.enums import (
+    EquipmentType,
+    EventType,
+    FindingSeverity,
+    Priority,
+    QuoteStatus,
+    ServiceType,
+    UserRole,
+    WorkOrderStatus,
+)
+from app.models.tables import (
+    Attachment,
+    Contact,
+    Customer,
+    Equipment,
+    Finding,
+    Organization,
+    Quote,
+    QuoteLine,
+    TimeEntry,
+    User,
+    WorkOrder,
+    WorkOrderEvent,
+)
+
+__all__ = [
+    "EquipmentType",
+    "EventType",
+    "FindingSeverity",
+    "Priority",
+    "QuoteStatus",
+    "ServiceType",
+    "UserRole",
+    "WorkOrderStatus",
+    "Attachment",
+    "Contact",
+    "Customer",
+    "Equipment",
+    "Finding",
+    "Organization",
+    "Quote",
+    "QuoteLine",
+    "TimeEntry",
+    "User",
+    "WorkOrder",
+    "WorkOrderEvent",
+]

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg" />
+  <title>Serviceflow · Staff</title>
+  <link rel="stylesheet" href="/assets/css/design-system.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="logo">S</div><b>Serviceflow</b></div>
+      <a class="nav-link" data-route="dashboard"><span class="ic">▦</span> Dashboard</a>
+      <a class="nav-link" data-route="workorders"><span class="ic">🔧</span> Work Orders</a>
+      <a class="nav-link" data-route="field"><span class="ic">📍</span> Field Service</a>
+      <a class="nav-link" data-route="customers"><span class="ic">🏢</span> Customers</a>
+      <a class="nav-link" data-route="equipment"><span class="ic">⚙️</span> Equipment</a>
+      <div class="spacer"></div>
+      <div class="who">
+        <b id="whoName">—</b>
+        <span id="whoRole" class="muted"></span>
+        <div style="margin-top:10px"><a id="logout" class="nav-link" style="padding:.4rem .5rem">↩ Sign out</a></div>
+      </div>
+    </aside>
+
+    <div class="main">
+      <div class="topbar">
+        <div class="row">
+          <strong id="orgName">Service Center</strong>
+        </div>
+        <div class="row">
+          <button class="btn btn-primary btn-sm" id="newWoBtn">+ New Work Order</button>
+        </div>
+      </div>
+      <div class="content" id="view"><div class="empty"><div class="big">◍</div>Loading…</div></div>
+    </div>
+  </div>
+  <script type="module" src="/assets/js/staff.js"></script>
+</body>
+</html>

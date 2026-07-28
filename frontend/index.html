@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg" />
+  <title>Serviceflow — Software for industrial repair service centers</title>
+  <link rel="stylesheet" href="/assets/css/design-system.css" />
+  <style>
+    .nav { position: sticky; top: 0; z-index: 30; background: rgba(255,255,255,.9);
+      backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+    .nav .inner { max-width: 1140px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; }
+    .nav .logo-row { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.15rem; }
+    .nav .logo { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(135deg,var(--brand-500),var(--accent-500)); display: grid; place-items: center; color: #fff; }
+    .hero { background: radial-gradient(1200px 500px at 70% -10%, rgba(47,127,209,.18), transparent),
+      linear-gradient(180deg, #fff, var(--surface-2)); padding: 84px 24px 64px; }
+    .hero .inner { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; }
+    .hero h1 { font-size: 3rem; line-height: 1.05; letter-spacing: -.03em; }
+    .hero .kicker { display:inline-block; background:#e0f2fe; color:#0369a1; font-weight:700; font-size:.8rem;
+      padding:.3rem .7rem; border-radius:999px; text-transform:uppercase; letter-spacing:.05em; margin-bottom:16px; }
+    .hero p.lead { font-size: 1.15rem; color: var(--ink-700); max-width: 46ch; }
+    .mock { background:#fff; border:1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh-lg); overflow:hidden; }
+    .mock .bar { background: var(--brand-900); height: 34px; display:flex; align-items:center; gap:6px; padding:0 12px; }
+    .mock .bar i { width:10px;height:10px;border-radius:50%;background:#3a5578; display:inline-block; }
+    .mock .body { padding: 16px; display:grid; gap:10px; }
+    .mock .kpis { display:grid; grid-template-columns: repeat(3,1fr); gap:8px; }
+    .mock .kpi { background: var(--surface-2); border:1px solid var(--line); border-radius:8px; padding:10px; }
+    .mock .kpi b { font-size:1.4rem; } .mock .kpi span { font-size:.68rem; color:var(--ink-500); text-transform:uppercase; }
+    .mock .rowline { height:12px; background:var(--surface-3); border-radius:4px; }
+    section.band { max-width: 1140px; margin: 0 auto; padding: 64px 24px; }
+    .features { display:grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+    .feature { background:#fff; border:1px solid var(--line); border-radius: var(--r-lg); padding: 24px; box-shadow: var(--sh-sm); }
+    .feature .ic { font-size: 1.9rem; } .feature h3 { margin: 12px 0 6px; }
+    .steps { display:grid; grid-template-columns: repeat(4,1fr); gap: 16px; counter-reset: s; }
+    .step { position: relative; padding-top: 8px; }
+    .step::before { counter-increment: s; content: counter(s); display:grid; place-items:center; width:36px; height:36px;
+      border-radius:50%; background: var(--brand-600); color:#fff; font-weight:800; margin-bottom:12px; }
+    .cta { background: linear-gradient(135deg, var(--brand-800), var(--brand-600)); color:#fff; border-radius: var(--r-xl); padding: 48px; text-align:center; }
+    .cta h2 { color:#fff; font-size: 2rem; }
+    footer { border-top: 1px solid var(--line); padding: 28px 24px; text-align:center; color: var(--ink-500); font-size:.9rem; }
+    .pillrow { display:flex; gap:8px; flex-wrap:wrap; margin-top: 20px; }
+    .pillrow .badge { font-size:.8rem; padding:.35rem .7rem; }
+    @media (max-width: 820px) { .hero .inner, .features, .steps { grid-template-columns: 1fr; } .hero h1 { font-size: 2.2rem; } }
+  </style>
+</head>
+<body>
+  <nav class="nav"><div class="inner">
+    <div class="logo-row"><span class="logo">S</span> Serviceflow</div>
+    <div class="row"><a href="#features">Features</a><a href="#how">How it works</a>
+      <a class="btn btn-primary btn-sm" href="/login.html">Sign in</a></div>
+  </div></nav>
+
+  <header class="hero"><div class="inner">
+    <div>
+      <span class="kicker">Industrial MRO · Repair Service Centers</span>
+      <h1>Run every repair from intake to invoice.</h1>
+      <p class="lead">Serviceflow is the operating system for shops that repair
+        <b>motors, valves, Limitorque actuators, pumps &amp; blowers</b> — plus
+        field service and a live customer status portal.</p>
+      <div class="row" style="margin-top:24px">
+        <a class="btn btn-primary" href="/login.html">Launch the demo →</a>
+        <a class="btn btn-ghost" href="#how">See how it works</a>
+      </div>
+      <div class="pillrow">
+        <span class="badge">Work-order lifecycle</span>
+        <span class="badge">Asset history</span>
+        <span class="badge">Field dispatch</span>
+        <span class="badge">Customer portal</span>
+        <span class="badge">Quote approvals</span>
+      </div>
+    </div>
+    <div class="mock">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="body">
+        <div class="kpis">
+          <div class="kpi"><span>Open WOs</span><br><b>4</b></div>
+          <div class="kpi"><span>Rush</span><br><b style="color:var(--accent-600)">1</b></div>
+          <div class="kpi"><span>Ready</span><br><b style="color:var(--ok)">1</b></div>
+        </div>
+        <div class="spread"><span class="badge status in_repair">In Repair</span><div class="rowline" style="width:40%"></div></div>
+        <div class="spread"><span class="badge status quote_pending">Awaiting Approval</span><div class="rowline" style="width:55%"></div></div>
+        <div class="spread"><span class="badge status ready">Ready</span><div class="rowline" style="width:30%"></div></div>
+        <div class="spread"><span class="badge status intake">Intake</span><div class="rowline" style="width:60%"></div></div>
+      </div>
+    </div>
+  </div></header>
+
+  <section class="band" id="features">
+    <div style="text-align:center;margin-bottom:40px">
+      <h2>Everything your service center runs on</h2>
+      <p class="muted">One system of record for the shop floor, the field, and your customers.</p>
+    </div>
+    <div class="features">
+      <div class="feature"><div class="ic">🔧</div><h3>Work-order lifecycle</h3>
+        <p class="muted">Intake → Inspection → Quote → Approval → Repair → Test → Ship. Every step time-stamped and enforced by a real state machine.</p></div>
+      <div class="feature"><div class="ic">⚙️</div><h3>Asset-centric history</h3>
+        <p class="muted">Every motor, valve, actuator and pump keeps a permanent nameplate and repair record — so the fifth job is faster than the first.</p></div>
+      <div class="feature"><div class="ic">📍</div><h3>Field service dispatch</h3>
+        <p class="muted">Schedule on-site diagnostics and repairs from the same job engine you use in the shop.</p></div>
+      <div class="feature"><div class="ic">💬</div><h3>Customer status portal</h3>
+        <p class="muted">Your customers log in to see live status, a full timeline, and their complete equipment history — no more status phone calls.</p></div>
+      <div class="feature"><div class="ic">✅</div><h3>Online quote approvals</h3>
+        <p class="muted">Send quotes from the job; customers approve or decline online, and the work order advances automatically.</p></div>
+      <div class="feature"><div class="ic">🏢</div><h3>Multi-tenant SaaS</h3>
+        <p class="muted">Built as a subscription platform with strict per-tenant isolation and role-based access for owners, writers and technicians.</p></div>
+    </div>
+  </section>
+
+  <section class="band" id="how" style="background:var(--surface-2);border-radius:var(--r-xl)">
+    <div style="text-align:center;margin-bottom:40px"><h2>From dock to done</h2></div>
+    <div class="steps">
+      <div class="step"><h3>Receive</h3><p class="muted">Log the asset at intake with nameplate data and the reported problem.</p></div>
+      <div class="step"><h3>Inspect &amp; quote</h3><p class="muted">Record findings, build a labor + parts quote, send it for approval.</p></div>
+      <div class="step"><h3>Repair &amp; test</h3><p class="muted">Technicians log time, move the job through repair and testing.</p></div>
+      <div class="step"><h3>Ship &amp; invoice</h3><p class="muted">Mark ready, ship, and close — with the whole history preserved.</p></div>
+    </div>
+  </section>
+
+  <section class="band"><div class="cta">
+    <h2>See Serviceflow in action</h2>
+    <p style="color:#cfe0f2;max-width:52ch;margin:0 auto 22px">Explore the working demo with sample motors, valves and pumps — staff app and customer portal.</p>
+    <a class="btn btn-accent" href="/login.html">Open the demo</a>
+  </div></section>
+
+  <footer>© Serviceflow — SaaS for industrial repair service centers. Built with FastAPI + modern HTML/CSS/JS.</footer>
+</body>
+</html>
