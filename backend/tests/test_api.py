@@ -107,6 +107,33 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_status_change_creates_notification(client, staff_headers):
+    # Create a fresh job, move intake -> inspection (customer-visible), expect a notification.
+    cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]
+    wo = client.post("/api/work-orders", headers=staff_headers,
+                     json={"customer_id": cid, "title": "Notify test"}).json()
+    before = len(client.get("/api/notifications", headers=staff_headers).json())
+    client.post(f"/api/work-orders/{wo['id']}/status", headers=staff_headers,
+                json={"status": "inspection", "message": "Started inspection", "visible_to_customer": True})
+    notes = client.get("/api/notifications", headers=staff_headers).json()
+    assert len(notes) == before + 1
+    latest = notes[0]
+    assert latest["work_order_id"] == wo["id"]
+    assert latest["channel"] == "email"
+    assert latest["status"] in ("sent", "queued")
+
+
+def test_internal_status_change_creates_no_notification(client, staff_headers):
+    cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]
+    wo = client.post("/api/work-orders", headers=staff_headers,
+                     json={"customer_id": cid, "title": "Silent test"}).json()
+    before = len(client.get("/api/notifications", headers=staff_headers).json())
+    client.post(f"/api/work-orders/{wo['id']}/status", headers=staff_headers,
+                json={"status": "inspection", "visible_to_customer": False})
+    after = len(client.get("/api/notifications", headers=staff_headers).json())
+    assert after == before  # internal-only change does not notify the customer
+
+
 def test_upload_and_fetch_attachment(client, staff_headers, portal_headers):
     wos = client.get("/api/work-orders", headers=staff_headers).json()
     wo = next(w for w in wos if w["number"] == "WO-2026-0001")  # Acme's job

@@ -54,6 +54,8 @@ export const api = {
   // labor & costing
   logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),
   costing: (woId) => request(`/api/work-orders/${woId}/costing`),
+  // notifications
+  notifications: () => request("/api/notifications"),
   // invoices
   invoices: (customerId) => request(`/api/invoices${customerId ? `?customer_id=${customerId}` : ""}`),
   createInvoice: (woId, b) => request(`/api/work-orders/${woId}/invoices`, { method: "POST", body: b }),

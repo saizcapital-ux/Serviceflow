@@ -24,6 +24,8 @@ from app.models.enums import (
     EventType,
     FindingSeverity,
     InvoiceStatus,
+    NotificationChannel,
+    NotificationStatus,
     Priority,
     QuoteStatus,
     ServiceType,
@@ -260,6 +262,23 @@ class InvoiceLine(Base):
     line_total: Mapped[float] = mapped_column(Float, default=0.0)
 
     invoice: Mapped[Invoice] = relationship(back_populates="lines")
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), index=True)
+    work_order_id: Mapped[int | None] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    channel: Mapped[NotificationChannel] = mapped_column(Enum(NotificationChannel), default=NotificationChannel.email)
+    recipient: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[NotificationStatus] = mapped_column(Enum(NotificationStatus), default=NotificationStatus.queued)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TimeEntry(Base):

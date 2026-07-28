@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     s3_bucket: str = ""
     s3_region: str = "us-east-1"
 
+    # Notifications. If SMTP host is unset, emails are logged (console backend)
+    # but still recorded — so the feature works out of the box in dev.
+    notifications_enabled: bool = True
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    email_from: str = "no-reply@serviceflow.app"
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins.strip() == "*":

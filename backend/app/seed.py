@@ -22,6 +22,9 @@ from app.models import (
     Invoice,
     InvoiceLine,
     InvoiceStatus,
+    Notification,
+    NotificationChannel,
+    NotificationStatus,
     Organization,
     Priority,
     Quote,
@@ -203,6 +206,18 @@ def seed() -> None:
         q2.subtotal = 2055; q2.tax = 169.54; q2.total = 2224.54
         db.add(WorkOrderEvent(work_order_id=wo2.id, event_type=EventType.quote_sent,
                               message="Quote WO-2026-0002-Q1 issued: $2,224.54.", visible_to_customer=True))
+        db.add_all([
+            Notification(organization_id=org.id, customer_id=acme.id, work_order_id=wo2.id,
+                         channel=NotificationChannel.email, recipient="buyer@acmepower.com",
+                         subject="Quote WO-2026-0002-Q1 ready for approval — $2,224.54",
+                         body="A quote is ready for your approval in the portal.",
+                         status=NotificationStatus.sent, sent_at=datetime.now(timezone.utc) - timedelta(hours=3)),
+            Notification(organization_id=org.id, customer_id=acme.id, work_order_id=wo1.id,
+                         channel=NotificationChannel.email, recipient="buyer@acmepower.com",
+                         subject="Update on repair WO-2026-0001: In repair",
+                         body="Your 250HP motor rewind is now in progress.",
+                         status=NotificationStatus.sent, sent_at=datetime.now(timezone.utc) - timedelta(hours=1)),
+        ])
 
         # 3) Pump — field service scheduled
         wo3 = make_wo("WO-2026-0003", gulf, pump,

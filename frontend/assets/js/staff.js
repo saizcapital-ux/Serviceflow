@@ -44,6 +44,7 @@ async function router() {
     if (route === "customers") return renderCustomers();
     if (route === "equipment") return renderEquipment();
     if (route === "invoices") return renderInvoices();
+    if (route === "notifications") return renderNotifications();
     renderDashboard();
   } catch (ex) { view.innerHTML = `<div class="empty"><div class="big">⚠</div>${esc(ex.message)}</div>`; }
 }
@@ -588,6 +589,28 @@ async function renderInvoices() {
       try { await api.markInvoicePaid(b.dataset.invPaid, true); toast("Marked paid", "ok"); renderInvoices(); }
       catch (e) { toast(e.message, "err"); }
     }));
+}
+
+/* ---------- notifications ---------- */
+async function renderNotifications() {
+  loading();
+  const list = await api.notifications();
+  const chIcon = { email: "✉️", sms: "💬", inapp: "🔔" };
+  const stBadge = (s) => `<span class="badge status ${s === "sent" ? "ready" : s === "failed" ? "cancelled" : "quote_pending"}">${esc(s)}</span>`;
+  view.innerHTML = `
+    <div class="page-title"><h1>Notifications</h1>
+      <span class="muted">Messages sent to customers on status changes &amp; quotes</span></div>
+    <div class="card"><div class="table-wrap"><table class="data">
+      <thead><tr><th>Channel</th><th>Recipient</th><th>Subject</th><th>Status</th><th>When</th></tr></thead>
+      <tbody>${list.map((n) => `<tr data-nostyle>
+        <td class="nowrap">${chIcon[n.channel] || ""} ${esc(n.channel)}</td>
+        <td class="mono" style="font-size:.82rem">${esc(n.recipient)}</td>
+        <td>${esc(n.subject)}</td>
+        <td>${stBadge(n.status)}</td>
+        <td class="muted nowrap">${fmtDateTime(n.created_at)}</td></tr>`).join("") ||
+      '<tr><td colspan="5" class="empty" style="padding:32px"><div class="big">🔔</div>No notifications yet. Change a job status or send a quote to trigger one.</td></tr>'}
+      </tbody></table></div></div>`;
+  els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
 }
 
 boot();

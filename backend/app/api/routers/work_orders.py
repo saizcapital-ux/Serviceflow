@@ -36,7 +36,7 @@ from app.schemas import (
     WorkOrderSummary,
     WorkOrderUpdate,
 )
-from app.services import workflow
+from app.services import notifications, workflow
 
 router = APIRouter(prefix="/api/work-orders", tags=["work-orders"])
 
@@ -142,6 +142,10 @@ def change_status(
         )
     except workflow.TransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    if payload.visible_to_customer:
+        notifications.notify_customer_status(
+            db, wo, payload.message or f"Status updated to {payload.status.value.replace('_', ' ')}."
+        )
     db.commit()
     return _load_detail(db, wo_id, user.organization_id)
 
@@ -199,6 +203,7 @@ def create_quote(
             message=f"Quote {quote.number} issued: ${quote.total:,.2f}.", visible_to_customer=True,
         )
     )
+    notifications.notify_quote_sent(db, wo, quote.number, quote.total)
     db.commit()
     db.refresh(quote)
     return quote

@@ -76,3 +76,15 @@ class InvoiceStatus(str, enum.Enum):
     sent = "sent"
     paid = "paid"
     void = "void"
+
+
+class NotificationChannel(str, enum.Enum):
+    email = "email"
+    sms = "sms"
+    inapp = "inapp"
+
+
+class NotificationStatus(str, enum.Enum):
+    queued = "queued"
+    sent = "sent"
+    failed = "failed"

@@ -10,6 +10,8 @@ from app.models.enums import (
     EventType,
     FindingSeverity,
     InvoiceStatus,
+    NotificationChannel,
+    NotificationStatus,
     Priority,
     QuoteStatus,
     ServiceType,
@@ -211,6 +213,18 @@ class InvoiceCreate(BaseModel):
 
 class MarkPaid(BaseModel):
     paid: bool = True
+
+
+class NotificationOut(ORMModel):
+    id: int
+    channel: NotificationChannel
+    recipient: str
+    subject: str
+    status: NotificationStatus
+    work_order_id: int | None = None
+    customer_id: int | None = None
+    created_at: datetime
+    sent_at: datetime | None = None
 
 
 class AttachmentOut(ORMModel):
