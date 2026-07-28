@@ -45,6 +45,7 @@ async function router() {
     if (route === "equipment") return renderEquipment();
     if (route === "invoices") return renderInvoices();
     if (route === "notifications") return renderNotifications();
+    if (route === "billing") return renderBilling();
     renderDashboard();
   } catch (ex) { view.innerHTML = `<div class="empty"><div class="big">⚠</div>${esc(ex.message)}</div>`; }
 }
@@ -686,6 +687,54 @@ function openSchedule(woId, techs, after) {
       m.close(); toast("Visit scheduled", "ok"); refresh();
     } catch (ex) { toast(ex.message, "err"); }
   };
+}
+
+/* ---------- billing (SaaS subscription) ---------- */
+async function renderBilling() {
+  loading();
+  const [plans, sub] = await Promise.all([api.plans(), api.subscription()]);
+  const isOwner = (auth.user || {}).role === "owner";
+  const statusBadgeCls = { active: "ready", trialing: "quote_pending", past_due: "on_hold", canceled: "cancelled" }[sub.subscription_status] || "intake";
+  const planCard = (p) => {
+    const current = sub.plan === p.id;
+    return `<div class="card card-pad" style="${current ? "border:2px solid var(--brand-500)" : ""}">
+      <div class="spread"><h3>${esc(p.name)}</h3>${current ? '<span class="badge status ready">Current</span>' : ""}</div>
+      <div style="font-size:2rem;font-weight:800;margin:8px 0">$${p.price_monthly}<span class="muted" style="font-size:.9rem;font-weight:400">/mo</span></div>
+      <div class="muted" style="font-size:.84rem;margin-bottom:12px">Up to ${p.seats} users</div>
+      <ul style="list-style:none;padding:0;margin:0 0 16px;display:grid;gap:6px;font-size:.88rem">
+        ${p.features.map((f) => `<li>✓ ${esc(f)}</li>`).join("")}</ul>
+      ${isOwner ? `<button class="btn ${current ? "btn-ghost" : "btn-primary"} btn-block" data-plan="${p.id}" ${current ? "disabled" : ""}>
+        ${current ? "Current plan" : "Choose " + esc(p.name)}</button>` : '<p class="muted" style="font-size:.82rem">Only the owner can change the plan.</p>'}
+    </div>`;
+  };
+  view.innerHTML = `
+    <div class="page-title"><h1>Billing &amp; subscription</h1></div>
+    <div class="card card-pad" style="margin-bottom:20px">
+      <div class="spread wrap">
+        <div><div class="stat-label">Current plan</div>
+          <div style="font-size:1.5rem;font-weight:700;text-transform:capitalize">${esc(sub.plan)}
+            <span class="badge status ${statusBadgeCls}">${esc(sub.subscription_status)}</span></div></div>
+        <div><div class="stat-label">Seats</div><div style="font-size:1.5rem;font-weight:700">${sub.seats}</div></div>
+        <div><div class="stat-label">Renews</div><div style="font-size:1.1rem">${sub.current_period_end ? fmtDate(sub.current_period_end) : "—"}</div></div>
+        ${isOwner && sub.subscription_status === "active" ? '<button class="btn btn-danger" id="cancelSub">Cancel subscription</button>' : ""}
+      </div>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">${plans.map(planCard).join("")}</div>
+    <p class="muted" style="margin-top:16px;font-size:.84rem">💡 Running in mock billing mode — choosing a plan activates it instantly. Set <span class="mono">SERVICEFLOW_STRIPE_SECRET_KEY</span> to enable real Stripe checkout.</p>`;
+
+  els("[data-plan]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "Processing…";
+    try {
+      const res = await api.checkout(b.dataset.plan);
+      if (res.checkout_url) { location.href = res.checkout_url; return; }
+      toast(res.message || "Subscription updated", "ok"); renderBilling();
+    } catch (ex) { toast(ex.message, "err"); renderBilling(); }
+  }));
+  const cs = el("#cancelSub");
+  if (cs) cs.addEventListener("click", async () => {
+    try { await api.cancelSubscription(); toast("Subscription canceled", ""); renderBilling(); }
+    catch (ex) { toast(ex.message, "err"); }
+  });
 }
 
 /* ---------- notifications ---------- */

@@ -44,7 +44,14 @@ class Organization(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
-    plan: Mapped[str] = mapped_column(String(40), default="trial")
+    # SaaS subscription (billing for Serviceflow itself).
+    plan: Mapped[str] = mapped_column(String(40), default="trial")  # trial|starter|pro|enterprise
+    subscription_status: Mapped[str] = mapped_column(String(20), default="trialing")  # trialing|active|past_due|canceled
+    seats: Mapped[int] = mapped_column(Integer, default=5)
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(80))
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(80))
     # Internal fully-burdened labor cost per hour, used for job-costing/margin.
     labor_cost_rate: Mapped[float] = mapped_column(Float, default=95.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

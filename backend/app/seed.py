@@ -51,7 +51,12 @@ def seed() -> None:
     reset()
     db = SessionLocal()
     try:
-        org = Organization(name="Apex Rotating Equipment Repair", slug="apex-repair", plan="pro")
+        org = Organization(
+            name="Apex Rotating Equipment Repair", slug="apex-repair", plan="pro",
+            subscription_status="active", seats=20,
+            current_period_end=datetime.now(timezone.utc) + timedelta(days=24),
+            trial_ends_at=datetime.now(timezone.utc) - timedelta(days=6),
+        )
         db.add(org)
         db.flush()
 

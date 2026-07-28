@@ -262,6 +262,26 @@ class CostingSummary(BaseModel):
     margin_pct: float | None  # margin / estimate
 
 
+class PlanOut(BaseModel):
+    id: str
+    name: str
+    price_monthly: int
+    seats: int
+    features: list[str]
+
+
+class SubscriptionOut(ORMModel):
+    plan: str
+    subscription_status: str
+    seats: int
+    trial_ends_at: datetime | None = None
+    current_period_end: datetime | None = None
+
+
+class CheckoutRequest(BaseModel):
+    plan_id: str
+
+
 class UserSummary(ORMModel):
     id: int
     full_name: str

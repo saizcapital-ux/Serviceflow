@@ -107,6 +107,36 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_billing_plans_and_mock_checkout(client, staff_headers):
+    plans = client.get("/api/billing/plans", headers=staff_headers).json()
+    ids = {p["id"] for p in plans}
+    assert {"starter", "pro", "enterprise"} <= ids
+
+    # Owner subscribes (mock mode activates immediately)
+    r = client.post("/api/billing/checkout", headers=staff_headers, json={"plan_id": "enterprise"})
+    assert r.status_code == 200, r.text
+    assert r.json().get("mock") is True
+    sub = client.get("/api/billing/subscription", headers=staff_headers).json()
+    assert sub["plan"] == "enterprise" and sub["subscription_status"] == "active"
+    assert sub["seats"] == 100
+
+
+def test_billing_unknown_plan_rejected(client, staff_headers):
+    r = client.post("/api/billing/checkout", headers=staff_headers, json={"plan_id": "platinum"})
+    assert r.status_code == 400
+
+
+def test_billing_checkout_owner_only(client, portal_headers):
+    # Portal (customer) cannot checkout; also non-owner staff is blocked.
+    assert client.post("/api/billing/checkout", headers=portal_headers, json={"plan_id": "pro"}).status_code == 403
+
+
+def test_billing_non_owner_staff_blocked(client):
+    tok = client.post("/api/auth/login", json={"email": "tech@apexrepair.com", "password": "Password123"}).json()["access_token"]
+    h = {"Authorization": f"Bearer {tok}"}
+    assert client.post("/api/billing/checkout", headers=h, json={"plan_id": "pro"}).status_code == 403
+
+
 def test_schedule_field_visit(client, staff_headers):
     techs = client.get("/api/users?role=technician", headers=staff_headers).json()
     assert techs, "seed should include a technician"

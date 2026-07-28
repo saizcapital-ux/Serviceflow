@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     email_from: str = "no-reply@serviceflow.app"
 
+    # Stripe (SaaS subscription billing). If no secret key is set, billing runs
+    # in mock mode: checkout activates the plan immediately (great for demos).
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    billing_success_url: str = "http://localhost:5173/app/#/billing?checkout=success"
+    billing_cancel_url: str = "http://localhost:5173/app/#/billing?checkout=cancel"
+
+    @property
+    def stripe_enabled(self) -> bool:
+        return bool(self.stripe_secret_key)
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins.strip() == "*":

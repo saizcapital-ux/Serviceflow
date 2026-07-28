@@ -56,6 +56,11 @@ export const api = {
   // labor & costing
   logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),
   costing: (woId) => request(`/api/work-orders/${woId}/costing`),
+  // billing (SaaS subscription)
+  plans: () => request("/api/billing/plans"),
+  subscription: () => request("/api/billing/subscription"),
+  checkout: (planId) => request("/api/billing/checkout", { method: "POST", body: { plan_id: planId } }),
+  cancelSubscription: () => request("/api/billing/cancel", { method: "POST" }),
   // notifications
   notifications: () => request("/api/notifications"),
   // invoices
