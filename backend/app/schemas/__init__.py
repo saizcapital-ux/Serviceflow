@@ -213,6 +213,32 @@ class MarkPaid(BaseModel):
     paid: bool = True
 
 
+class TimeEntryCreate(BaseModel):
+    hours: float = Field(gt=0)
+    note: str | None = None
+    worked_on: date | None = None
+    user_id: int | None = None  # defaults to the logged-in technician
+
+
+class TimeEntryOut(ORMModel):
+    id: int
+    work_order_id: int
+    user_id: int
+    hours: float
+    note: str | None = None
+    worked_on: date
+
+
+class CostingSummary(BaseModel):
+    logged_hours: float
+    labor_rate: float
+    labor_cost: float
+    estimate: float           # approved quote total (revenue)
+    invoiced: float
+    margin: float             # estimate - labor_cost
+    margin_pct: float | None  # margin / estimate
+
+
 class WorkOrderSummary(ORMModel):
     id: int
     number: str
@@ -239,6 +265,7 @@ class WorkOrderDetail(WorkOrderSummary):
     findings: list[FindingOut] = []
     quotes: list[QuoteOut] = []
     invoices: list[InvoiceOut] = []
+    time_entries: list[TimeEntryOut] = []
 
 
 # ---------- Dashboard ----------

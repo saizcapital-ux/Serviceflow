@@ -27,6 +27,7 @@ from app.models import (
     QuoteLine,
     QuoteStatus,
     ServiceType,
+    TimeEntry,
     User,
     UserRole,
     WorkOrder,
@@ -157,6 +158,12 @@ def seed() -> None:
         wo1.total_estimate = 9180
         db.add(WorkOrderEvent(work_order_id=wo1.id, event_type=EventType.quote_decision,
                               message="Quote WO-2026-0001-Q1 approved by customer.", visible_to_customer=True))
+        db.add_all([
+            TimeEntry(work_order_id=wo1.id, user_id=tech.id, hours=6.5,
+                      note="Teardown, strip old winding, clean core", worked_on=today - timedelta(days=2)),
+            TimeEntry(work_order_id=wo1.id, user_id=tech.id, hours=8.0,
+                      note="Rewind stator, connect & lace", worked_on=today - timedelta(days=1)),
+        ])
 
         # 2) Limitorque actuator — awaiting customer approval
         wo2 = make_wo("WO-2026-0002", acme, limitorque,

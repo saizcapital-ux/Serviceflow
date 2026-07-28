@@ -51,6 +51,9 @@ export const api = {
   changeStatus: (id, b) => request(`/api/work-orders/${id}/status`, { method: "POST", body: b }),
   addFinding: (id, b) => request(`/api/work-orders/${id}/findings`, { method: "POST", body: b }),
   createQuote: (id, b) => request(`/api/work-orders/${id}/quotes`, { method: "POST", body: b }),
+  // labor & costing
+  logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),
+  costing: (woId) => request(`/api/work-orders/${woId}/costing`),
   // invoices
   invoices: (customerId) => request(`/api/invoices${customerId ? `?customer_id=${customerId}` : ""}`),
   createInvoice: (woId, b) => request(`/api/work-orders/${woId}/invoices`, { method: "POST", body: b }),

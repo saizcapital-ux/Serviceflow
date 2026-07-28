@@ -43,6 +43,8 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     plan: Mapped[str] = mapped_column(String(40), default="trial")
+    # Internal fully-burdened labor cost per hour, used for job-costing/margin.
+    labor_cost_rate: Mapped[float] = mapped_column(Float, default=95.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     users: Mapped[list[User]] = relationship(back_populates="organization")

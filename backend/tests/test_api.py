@@ -107,6 +107,28 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_log_time_and_costing(client, staff_headers):
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = next(w for w in wos if w["number"] == "WO-2026-0001")  # seeded with 14.5h + approved quote
+    before = client.get(f"/api/work-orders/{wo['id']}/costing", headers=staff_headers).json()
+    assert before["logged_hours"] >= 14.5
+    assert before["labor_cost"] == round(before["logged_hours"] * before["labor_rate"], 2)
+    assert before["estimate"] > 0
+
+    logged = client.post(f"/api/work-orders/{wo['id']}/time-entries", headers=staff_headers,
+                         json={"hours": 2.5, "note": "Testing"})
+    assert logged.status_code == 201
+    after = client.get(f"/api/work-orders/{wo['id']}/costing", headers=staff_headers).json()
+    assert round(after["logged_hours"] - before["logged_hours"], 2) == 2.5
+
+
+def test_log_time_rejects_zero_hours(client, staff_headers):
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = wos[0]
+    r = client.post(f"/api/work-orders/{wo['id']}/time-entries", headers=staff_headers, json={"hours": 0})
+    assert r.status_code == 422  # Pydantic gt=0 validation
+
+
 def test_portal_invoices_scoped_and_pdf_access(client, staff_headers, portal_headers):
     invs = client.get("/api/portal/invoices", headers=portal_headers).json()
     assert any(i["number"] == "INV-2025-0031" for i in invs)  # Acme's paid invoice

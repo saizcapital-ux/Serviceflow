@@ -1,4 +1,6 @@
 """Work-order lifecycle endpoints (staff)."""
+from datetime import date
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -10,20 +12,25 @@ from app.models import (
     EventType,
     Finding,
     Invoice,
+    Organization,
     Quote,
     QuoteLine,
     QuoteStatus,
+    TimeEntry,
     User,
     WorkOrder,
     WorkOrderEvent,
     WorkOrderStatus,
 )
 from app.schemas import (
+    CostingSummary,
     FindingCreate,
     FindingOut,
     QuoteCreate,
     QuoteOut,
     StatusChangeRequest,
+    TimeEntryCreate,
+    TimeEntryOut,
     WorkOrderCreate,
     WorkOrderDetail,
     WorkOrderSummary,
@@ -45,6 +52,7 @@ def _load_detail(db: Session, wo_id: int, org_id: int) -> WorkOrder:
             selectinload(WorkOrder.findings),
             selectinload(WorkOrder.quotes).selectinload(Quote.lines),
             selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
+            selectinload(WorkOrder.time_entries),
         )
     )
     if not wo:
@@ -193,3 +201,36 @@ def create_quote(
     db.commit()
     db.refresh(quote)
     return quote
+
+
+@router.post("/{wo_id}/time-entries", response_model=TimeEntryOut, status_code=status.HTTP_201_CREATED)
+def log_time(wo_id: int, payload: TimeEntryCreate, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    wo = _load_detail(db, wo_id, user.organization_id)
+    entry = TimeEntry(
+        work_order_id=wo.id,
+        user_id=payload.user_id or user.id,
+        hours=payload.hours,
+        note=payload.note,
+        worked_on=payload.worked_on or date.today(),
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+@router.get("/{wo_id}/costing", response_model=CostingSummary)
+def costing(wo_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    wo = _load_detail(db, wo_id, user.organization_id)
+    org = db.get(Organization, user.organization_id)
+    rate = org.labor_cost_rate if org else 95.0
+    hours = round(sum(t.hours for t in wo.time_entries), 2)
+    labor_cost = round(hours * rate, 2)
+    estimate = wo.total_estimate or 0.0
+    invoiced = round(sum(i.total for i in wo.invoices), 2)
+    margin = round(estimate - labor_cost, 2)
+    return CostingSummary(
+        logged_hours=hours, labor_rate=rate, labor_cost=labor_cost, estimate=estimate,
+        invoiced=invoiced, margin=margin,
+        margin_pct=round(margin / estimate * 100, 1) if estimate else None,
+    )

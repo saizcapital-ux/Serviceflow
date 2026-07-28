@@ -172,6 +172,11 @@ async function renderWorkOrder(id) {
   const quotes = w.quotes.map(quoteBlock).join("") || '<p class="muted">No quotes yet.</p>';
   const hasApprovedQuote = (w.quotes || []).some((q) => q.status === "approved");
   const invoices = (w.invoices || []).map(invoiceBlock).join("") || '<p class="muted">No invoices yet.</p>';
+  const timeEntries = (w.time_entries || []).map((t) => `
+    <div class="spread" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <div><strong>${t.hours}h</strong> <span class="muted">${esc(t.note || "")}</span></div>
+      <span class="muted nowrap">${fmtDate(t.worked_on)}</span>
+    </div>`).join("") || '<p class="muted">No labor logged yet.</p>';
 
   view.innerHTML = `
     <div class="row" style="margin-bottom:8px"><a href="#/workorders">← Work Orders</a></div>
@@ -193,6 +198,13 @@ async function renderWorkOrder(id) {
           <div class="card-body">${findings}</div></div>
         <div class="card"><div class="card-head"><h3>Quotes</h3></div>
           <div class="card-body stack">${quotes}</div></div>
+        <div class="card"><div class="card-head"><h3>Labor &amp; costing</h3>
+          <button class="btn btn-ghost btn-sm" id="logTime">+ Log time</button></div>
+          <div class="card-body">
+            <div id="costing" class="grid" style="grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+              <div class="muted" style="grid-column:1/-1">Loading costing…</div></div>
+            ${timeEntries}
+          </div></div>
         <div class="card"><div class="card-head"><h3>Invoices</h3>
           ${hasApprovedQuote ? '<button class="btn btn-accent btn-sm" id="newInvoice">+ Create invoice</button>' : ""}</div>
           <div class="card-body stack">${invoices}</div></div>
@@ -218,6 +230,8 @@ async function renderWorkOrder(id) {
   el("#advance").addEventListener("click", () => openStatusMenu(w));
   el("#addFinding").addEventListener("click", () => openFinding(w.id));
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
+  el("#logTime").addEventListener("click", () => openLogTime(w.id));
+  loadCosting(w.id);
   const inv = el("#newInvoice");
   if (inv) inv.addEventListener("click", () => openInvoice(w.id));
   els("[data-inv-pdf]").forEach((b) =>
@@ -227,6 +241,47 @@ async function renderWorkOrder(id) {
       try { await api.markInvoicePaid(b.dataset.invPaid, true); toast("Invoice marked paid", "ok"); renderWorkOrder(w.id); }
       catch (e) { toast(e.message, "err"); }
     }));
+}
+
+async function loadCosting(woId) {
+  const box = el("#costing");
+  if (!box) return;
+  try {
+    const c = await api.costing(woId);
+    const marginCls = c.margin >= 0 ? "ok" : "warn";
+    const tile = (label, val, cls = "") =>
+      `<div class="stat ${cls}" style="padding:12px 14px"><div class="stat-label">${label}</div>
+       <div class="stat-value" style="font-size:1.35rem">${val}</div></div>`;
+    box.innerHTML =
+      tile("Logged hours", `${c.logged_hours}h`) +
+      tile("Labor cost", money(c.labor_cost), "warn") +
+      tile("Quoted", money(c.estimate)) +
+      tile("Margin", `${money(c.margin)}${c.margin_pct != null ? ` · ${c.margin_pct}%` : ""}`, marginCls);
+  } catch {
+    box.innerHTML = '<div class="muted" style="grid-column:1/-1">Costing unavailable.</div>';
+  }
+}
+
+function openLogTime(woId) {
+  const today = new Date().toISOString().slice(0, 10);
+  const m = modal(`<div class="card-head"><h3>Log labor time</h3></div>
+    <div class="card-body stack">
+      <div class="row">
+        <label class="field grow"><span>Hours</span><input type="number" id="lh" min="0.25" step="0.25" value="1" /></label>
+        <label class="field grow"><span>Date</span><input type="date" id="ld" value="${today}" /></label>
+      </div>
+      <label class="field"><span>Note</span><textarea id="ln" placeholder="What was done…"></textarea></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="lc">Cancel</button>
+        <button class="btn btn-primary" id="lok">Log time</button></div></div>`);
+  el("#lc", m.root).onclick = m.close;
+  el("#lok", m.root).onclick = async () => {
+    const hours = +el("#lh", m.root).value;
+    if (!hours || hours <= 0) return toast("Enter hours", "err");
+    try {
+      await api.logTime(woId, { hours, note: el("#ln", m.root).value.trim() || null, worked_on: el("#ld", m.root).value || null });
+      m.close(); toast("Time logged", "ok"); renderWorkOrder(woId);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function invoiceBlock(inv) {
