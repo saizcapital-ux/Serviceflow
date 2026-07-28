@@ -1,12 +1,15 @@
 """Customer & equipment management (staff only)."""
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_staff
+from app.core.config import settings
 from app.core.database import get_db
 from app.models import Customer, Equipment, User
 from app.schemas import CustomerCreate, CustomerOut, EquipmentCreate, EquipmentOut
+from app.services.qr import qr_svg
 
 router = APIRouter(prefix="/api", tags=["customers"])
 
@@ -100,3 +103,17 @@ def get_equipment(equipment_id: int, db: Session = Depends(get_db), user: User =
     if not equipment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
     return equipment
+
+
+@router.get("/equipment/{equipment_id}/qr.svg")
+def equipment_qr(equipment_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """SVG QR code that deep-links to this asset (scan to open its history)."""
+    equipment = db.scalar(
+        select(Equipment).where(
+            Equipment.id == equipment_id, Equipment.organization_id == user.organization_id
+        )
+    )
+    if not equipment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
+    url = f"{settings.app_base_url}/app/#/equipment/{equipment_id}"
+    return Response(content=qr_svg(url), media_type="image/svg+xml")

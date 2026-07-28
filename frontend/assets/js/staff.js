@@ -1,5 +1,5 @@
 /* Staff application — hash-routed SPA for service-center employees. */
-import { api, auth, openPdf, openAttachment, uploadAttachment } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
@@ -35,13 +35,14 @@ async function router() {
   const [, path, id] = location.hash.replace(/^#\//, "").split("/").reduce(
     (acc, p, i) => { acc[i + 1] = p; return acc; }, ["#"]);
   const route = path || "dashboard";
-  setActive(route === "workorders" && id ? "workorders" : route);
+  setActive(route);
   try {
     if (route === "dashboard") return renderDashboard();
     if (route === "workorders" && id) return renderWorkOrder(id);
     if (route === "workorders") return renderWorkOrders();
     if (route === "field") return renderDispatch();
     if (route === "customers") return renderCustomers();
+    if (route === "equipment" && id) return renderEquipmentDetail(id);
     if (route === "equipment") return renderEquipment();
     if (route === "inventory") return renderInventory();
     if (route === "invoices") return renderInvoices();
@@ -593,7 +594,7 @@ async function renderEquipment() {
   view.innerHTML = `
     <div class="page-title"><h1>Equipment</h1></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
-      ${list.map((e) => `<div class="card card-pad">
+      ${list.map((e) => `<div class="card card-pad" data-eqid="${e.id}" style="cursor:pointer">
         <div class="row" style="margin-bottom:8px"><span style="font-size:1.8rem">${TYPE_ICON[e.equipment_type]}</span>
           <div><strong>${esc(e.tag || TYPE_LABEL[e.equipment_type])}</strong>
           <div class="muted" style="font-size:.84rem">${TYPE_LABEL[e.equipment_type]}</div></div></div>
@@ -603,6 +604,72 @@ async function renderEquipment() {
           <dt>Location</dt><dd>${esc(e.location || "—")}</dd></dl></div>`).join("") ||
       '<div class="empty"><div class="big">⚙️</div>No equipment yet.</div>'}
     </div>`;
+  els("[data-eqid]").forEach((c) => c.addEventListener("click", () => (location.hash = `#/equipment/${c.dataset.eqid}`)));
+}
+
+async function renderEquipmentDetail(id) {
+  loading();
+  const [eq, history] = await Promise.all([api.equipmentOne(id), api.workOrders({ equipment_id: id })]);
+  const cust = customersCache || (customersCache = await api.customers());
+  const owner = (cust.find((c) => c.id === eq.customer_id) || {}).name || "—";
+  const nameplate = eq.nameplate_data
+    ? Object.entries(eq.nameplate_data).map(([k, v]) =>
+        `<span class="badge" style="background:var(--surface-3)">${esc(k)}: <b>${esc(v)}</b></span>`).join(" ")
+    : "";
+  const rows = history.map((w) => `<tr data-wo="${w.id}">
+    <td class="mono nowrap">${esc(w.number)}</td><td>${esc(w.title)}</td>
+    <td>${statusBadge(w.status)}</td><td class="muted nowrap">${fmtDate(w.created_at)}</td></tr>`).join("")
+    || '<tr><td colspan="4" class="muted" style="text-align:center;padding:20px">No repair history yet.</td></tr>';
+
+  view.innerHTML = `
+    <div class="row" style="margin-bottom:8px"><a href="#/equipment">← Equipment</a></div>
+    <div class="page-title">
+      <div><h1 style="margin-bottom:4px">${TYPE_ICON[eq.equipment_type]} ${esc(eq.tag || TYPE_LABEL[eq.equipment_type])}</h1>
+        <div class="muted">${esc(eq.manufacturer || "")} ${esc(eq.model || "")} · ${TYPE_LABEL[eq.equipment_type]} · owned by ${esc(owner)}</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1.6fr 1fr;align-items:start">
+      <div class="stack">
+        <div class="card"><div class="card-head"><h3>Nameplate</h3></div>
+          <div class="card-body">
+            <dl class="kv"><dt>Serial</dt><dd class="mono">${esc(eq.serial_number || "—")}</dd>
+              <dt>Location</dt><dd>${esc(eq.location || "—")}</dd></dl>
+            <div class="row wrap" style="margin-top:10px">${nameplate}</div></div></div>
+        <div class="card"><div class="card-head"><h3>Repair history <span class="badge">${history.length}</span></h3></div>
+          <div class="table-wrap"><table class="data">
+            <thead><tr><th>WO #</th><th>Title</th><th>Status</th><th>Opened</th></tr></thead>
+            <tbody>${rows}</tbody></table></div></div>
+      </div>
+      <div class="card"><div class="card-head"><h3>Asset tag</h3>
+        <button class="btn btn-ghost btn-sm" id="printLabel">🖨 Print label</button></div>
+        <div class="card-body" style="text-align:center">
+          <div id="qrBox" style="max-width:200px;margin:0 auto">Loading QR…</div>
+          <p class="muted" style="font-size:.82rem;margin-top:10px">Scan to open this asset's history on any device.</p></div></div>
+    </div>`;
+
+  els("tr[data-wo]").forEach((tr) => tr.addEventListener("click", () => (location.hash = `#/workorders/${tr.dataset.wo}`)));
+  let svg = "";
+  try { svg = await fetchAuthedText(`/api/equipment/${id}/qr.svg`); el("#qrBox").innerHTML = svg; }
+  catch { el("#qrBox").innerHTML = '<span class="muted">QR unavailable</span>'; }
+  el("#printLabel").addEventListener("click", () => printLabel(eq, owner, svg));
+}
+
+function printLabel(eq, owner, svg) {
+  const w = window.open("", "_blank", "width=420,height=560");
+  if (!w) return toast("Allow pop-ups to print", "err");
+  w.document.write(`<!doctype html><html><head><title>Asset ${esc(eq.tag || eq.id)}</title>
+    <style>body{font-family:Arial,sans-serif;margin:0;padding:24px;text-align:center}
+      .tag{border:2px solid #0f172a;border-radius:12px;padding:20px;max-width:340px;margin:0 auto}
+      h1{font-size:20px;margin:0 0 4px} .sub{color:#475569;font-size:13px;margin-bottom:12px}
+      svg{width:200px;height:200px} .kv{font-size:12px;text-align:left;margin-top:12px}
+      .kv div{display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0;padding:3px 0}</style></head>
+    <body><div class="tag"><h1>${esc(eq.tag || TYPE_LABEL[eq.equipment_type] || "Asset")}</h1>
+      <div class="sub">${esc(eq.manufacturer || "")} ${esc(eq.model || "")}</div>
+      ${svg}
+      <div class="kv"><div><span>Serial</span><b>${esc(eq.serial_number || "—")}</b></div>
+        <div><span>Owner</span><b>${esc(owner)}</b></div>
+        <div><span>Serviceflow</span><b>${esc(eq.equipment_type)}</b></div></div></div>
+      <script>window.onload=()=>window.print()<\/script></body></html>`);
+  w.document.close();
 }
 
 /* ---------- invoices (global list) ---------- */

@@ -72,6 +72,7 @@ def list_work_orders(
     status_filter: WorkOrderStatus | None = Query(None, alias="status"),
     service_type: str | None = None,
     customer_id: int | None = None,
+    equipment_id: int | None = None,
     open_only: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
@@ -83,6 +84,8 @@ def list_work_orders(
         stmt = stmt.where(WorkOrder.status.in_(workflow.OPEN_STATUSES))
     if customer_id:
         stmt = stmt.where(WorkOrder.customer_id == customer_id)
+    if equipment_id:
+        stmt = stmt.where(WorkOrder.equipment_id == equipment_id)
     if service_type:
         stmt = stmt.where(WorkOrder.service_type == service_type)
     return db.scalars(stmt.order_by(WorkOrder.created_at.desc())).all()

@@ -9,6 +9,8 @@ class Settings(BaseSettings):
 
     app_name: str = "Serviceflow"
     environment: str = "development"
+    # Public base URL of the frontend, used to build QR deep-links to assets.
+    app_base_url: str = "http://localhost:5173"
 
     # Database — SQLite by default for zero-config dev; set DATABASE_URL for Postgres.
     database_url: str = "sqlite:///./serviceflow.db"

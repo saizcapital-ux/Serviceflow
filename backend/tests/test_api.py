@@ -107,6 +107,21 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_equipment_qr_svg(client, staff_headers):
+    eq = client.get("/api/equipment", headers=staff_headers).json()[0]
+    r = client.get(f"/api/equipment/{eq['id']}/qr.svg", headers=staff_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("image/svg+xml")
+    assert r.text.startswith("<svg") and "rect" in r.text
+
+
+def test_workorders_filter_by_equipment(client, staff_headers):
+    eq = client.get("/api/equipment", headers=staff_headers).json()
+    motor = next(e for e in eq if e["serial_number"] == "SN-MTR-88213")
+    wos = client.get(f"/api/work-orders?equipment_id={motor['id']}", headers=staff_headers).json()
+    assert wos and all(w["equipment_id"] == motor["id"] for w in wos)
+
+
 def test_parts_catalog_and_low_stock(client, staff_headers):
     parts = client.get("/api/parts", headers=staff_headers).json()
     assert parts, "seed should include parts"

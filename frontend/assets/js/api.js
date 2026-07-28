@@ -40,6 +40,7 @@ export const api = {
   customers: (q) => request(`/api/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   createCustomer: (b) => request("/api/customers", { method: "POST", body: b }),
   equipment: (customerId) => request(`/api/equipment${customerId ? `?customer_id=${customerId}` : ""}`),
+  equipmentOne: (id) => request(`/api/equipment/${id}`),
   createEquipment: (b) => request("/api/equipment", { method: "POST", body: b }),
   // work orders (staff)
   workOrders: (params = {}) => {
@@ -99,6 +100,15 @@ export async function openAuthed(path) {
 
 export const openPdf = (invoiceId) => openAuthed(`/api/invoices/${invoiceId}/pdf`);
 export const openAttachment = (attachmentId) => openAuthed(`/api/attachments/${attachmentId}/file`);
+
+/** Fetch an authenticated text/SVG endpoint and return the body text. */
+export async function fetchAuthedText(path) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!res.ok) throw new Error("Could not load");
+  return res.text();
+}
 
 /** Upload a file to a work order (multipart). */
 export async function uploadAttachment(woId, file, kind) {
