@@ -1,5 +1,5 @@
 /* Staff application — hash-routed SPA for service-center employees. */
-import { api, auth } from "/assets/js/api.js";
+import { api, auth, openPdf } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
@@ -43,6 +43,7 @@ async function router() {
     if (route === "field") return renderWorkOrders({ service_type: "field_service" }, "Field Service");
     if (route === "customers") return renderCustomers();
     if (route === "equipment") return renderEquipment();
+    if (route === "invoices") return renderInvoices();
     renderDashboard();
   } catch (ex) { view.innerHTML = `<div class="empty"><div class="big">⚠</div>${esc(ex.message)}</div>`; }
 }
@@ -169,6 +170,8 @@ async function renderWorkOrder(id) {
       <span class="badge" style="background:${sevColor(f.severity)};color:#fff">${esc(f.severity)}</span>
     </div>`).join("") || '<p class="muted">No findings recorded.</p>';
   const quotes = w.quotes.map(quoteBlock).join("") || '<p class="muted">No quotes yet.</p>';
+  const hasApprovedQuote = (w.quotes || []).some((q) => q.status === "approved");
+  const invoices = (w.invoices || []).map(invoiceBlock).join("") || '<p class="muted">No invoices yet.</p>';
 
   view.innerHTML = `
     <div class="row" style="margin-bottom:8px"><a href="#/workorders">← Work Orders</a></div>
@@ -190,6 +193,9 @@ async function renderWorkOrder(id) {
           <div class="card-body">${findings}</div></div>
         <div class="card"><div class="card-head"><h3>Quotes</h3></div>
           <div class="card-body stack">${quotes}</div></div>
+        <div class="card"><div class="card-head"><h3>Invoices</h3>
+          ${hasApprovedQuote ? '<button class="btn btn-accent btn-sm" id="newInvoice">+ Create invoice</button>' : ""}</div>
+          <div class="card-body stack">${invoices}</div></div>
       </div>
       <div class="stack">
         <div class="card"><div class="card-head"><h3>Equipment</h3></div>
@@ -212,6 +218,46 @@ async function renderWorkOrder(id) {
   el("#advance").addEventListener("click", () => openStatusMenu(w));
   el("#addFinding").addEventListener("click", () => openFinding(w.id));
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
+  const inv = el("#newInvoice");
+  if (inv) inv.addEventListener("click", () => openInvoice(w.id));
+  els("[data-inv-pdf]").forEach((b) =>
+    b.addEventListener("click", () => openPdf(b.dataset.invPdf).catch((e) => toast(e.message, "err"))));
+  els("[data-inv-paid]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      try { await api.markInvoicePaid(b.dataset.invPaid, true); toast("Invoice marked paid", "ok"); renderWorkOrder(w.id); }
+      catch (e) { toast(e.message, "err"); }
+    }));
+}
+
+function invoiceBlock(inv) {
+  const st = inv.status === "paid" ? "ready" : inv.status === "void" ? "cancelled" : "quote_pending";
+  return `<div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body">
+    <div class="spread"><strong class="mono">${esc(inv.number)}</strong>
+      <span class="badge status ${st}">${esc(inv.status)}</span></div>
+    <div class="spread" style="margin-top:8px"><span class="muted">Total</span><strong class="mono">${money(inv.total)}</strong></div>
+    <div class="spread"><span class="muted">Due</span><span>${fmtDate(inv.due_date)}</span></div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-ghost btn-sm" data-inv-pdf="${inv.id}">⬇ PDF</button>
+      ${inv.status !== "paid" ? `<button class="btn btn-success btn-sm" data-inv-paid="${inv.id}">Mark paid</button>` : ""}
+    </div></div></div>`;
+}
+
+function openInvoice(woId) {
+  const m = modal(`<div class="card-head"><h3>Create invoice</h3></div>
+    <div class="card-body stack">
+      <p class="muted">Generates an invoice from this work order's approved quote.</p>
+      <label class="field" style="max-width:180px"><span>Payment terms (days)</span>
+        <input type="number" id="due" value="30" min="0" /></label>
+      <label class="field"><span>Notes (optional)</span><textarea id="inote" placeholder="e.g. Net 30. Thank you."></textarea></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="ic">Cancel</button>
+        <button class="btn btn-primary" id="iok">Create invoice</button></div></div>`);
+  el("#ic", m.root).onclick = m.close;
+  el("#iok", m.root).onclick = async () => {
+    try {
+      const inv = await api.createInvoice(woId, { due_in_days: +el("#due", m.root).value || 30, notes: el("#inote", m.root).value.trim() || null });
+      m.close(); toast(`Created ${inv.number}`, "ok"); renderWorkOrder(woId);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function quoteBlock(q) {
@@ -410,6 +456,41 @@ async function renderEquipment() {
           <dt>Location</dt><dd>${esc(e.location || "—")}</dd></dl></div>`).join("") ||
       '<div class="empty"><div class="big">⚙️</div>No equipment yet.</div>'}
     </div>`;
+}
+
+/* ---------- invoices (global list) ---------- */
+async function renderInvoices() {
+  loading();
+  const [list, cust] = await Promise.all([api.invoices(), customersCache || api.customers()]);
+  customersCache = cust;
+  const byId = Object.fromEntries(cust.map((c) => [c.id, c.name]));
+  const outstanding = list.filter((i) => i.status !== "paid" && i.status !== "void")
+    .reduce((s, i) => s + i.total, 0);
+  view.innerHTML = `
+    <div class="page-title"><h1>Invoices</h1>
+      <div class="stat" style="padding:10px 16px"><div class="stat-label">Outstanding</div>
+        <div class="stat-value" style="font-size:1.4rem">${money(outstanding)}</div></div></div>
+    <div class="card"><div class="table-wrap"><table class="data">
+      <thead><tr><th>Invoice #</th><th>Customer</th><th>Work order</th><th>Status</th><th class="text-right">Total</th><th>Due</th><th></th></tr></thead>
+      <tbody>${list.map((i) => `<tr data-nostyle>
+        <td class="mono">${esc(i.number)}</td>
+        <td>${esc(byId[i.customer_id] || "—")}</td>
+        <td class="mono muted">WO #${i.work_order_id}</td>
+        <td><span class="badge status ${i.status === "paid" ? "ready" : i.status === "void" ? "cancelled" : "quote_pending"}">${esc(i.status)}</span></td>
+        <td class="text-right mono">${money(i.total)}</td>
+        <td class="muted nowrap">${fmtDate(i.due_date)}</td>
+        <td class="text-right"><button class="btn btn-ghost btn-sm" data-inv-pdf="${i.id}">⬇ PDF</button>
+          ${i.status !== "paid" ? `<button class="btn btn-success btn-sm" data-inv-paid="${i.id}">Paid</button>` : ""}</td></tr>`).join("") ||
+      '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No invoices yet.</td></tr>'}
+      </tbody></table></div></div>`;
+  els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
+  els("[data-inv-pdf]").forEach((b) =>
+    b.addEventListener("click", () => openPdf(b.dataset.invPdf).catch((e) => toast(e.message, "err"))));
+  els("[data-inv-paid]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      try { await api.markInvoicePaid(b.dataset.invPaid, true); toast("Marked paid", "ok"); renderInvoices(); }
+      catch (e) { toast(e.message, "err"); }
+    }));
 }
 
 boot();

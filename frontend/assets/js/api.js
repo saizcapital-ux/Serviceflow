@@ -51,10 +51,26 @@ export const api = {
   changeStatus: (id, b) => request(`/api/work-orders/${id}/status`, { method: "POST", body: b }),
   addFinding: (id, b) => request(`/api/work-orders/${id}/findings`, { method: "POST", body: b }),
   createQuote: (id, b) => request(`/api/work-orders/${id}/quotes`, { method: "POST", body: b }),
+  // invoices
+  invoices: (customerId) => request(`/api/invoices${customerId ? `?customer_id=${customerId}` : ""}`),
+  createInvoice: (woId, b) => request(`/api/work-orders/${woId}/invoices`, { method: "POST", body: b }),
+  markInvoicePaid: (invoiceId, paid) => request(`/api/invoices/${invoiceId}/paid`, { method: "POST", body: { paid } }),
   // portal
   portalWorkOrders: () => request("/api/portal/work-orders"),
+  portalInvoices: () => request("/api/portal/invoices"),
   portalWorkOrder: (id) => request(`/api/portal/work-orders/${id}`),
   portalEquipment: () => request("/api/portal/equipment"),
   decideQuote: (quoteId, approve, note) =>
     request(`/api/portal/quotes/${quoteId}/decision`, { method: "POST", body: { approve, note } }),
 };
+
+/** Fetch an authenticated PDF and open it in a new tab (blob URL). */
+export async function openPdf(invoiceId) {
+  const res = await fetch(`${API_BASE}/api/invoices/${invoiceId}/pdf`, {
+    headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!res.ok) throw new Error("Could not load PDF");
+  const url = URL.createObjectURL(await res.blob());
+  window.open(url, "_blank");
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}

@@ -1,5 +1,5 @@
 /* Customer portal — read-mostly SPA: status, history, and quote approval. */
-import { api, auth } from "/assets/js/api.js";
+import { api, auth, openPdf } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
@@ -34,6 +34,7 @@ async function router() {
   try {
     if (route === "orders" && parts[1]) return renderDetail(parts[1]);
     if (route === "equipment") return renderEquipment();
+    if (route === "invoices") return renderInvoices();
     return renderOrders();
   } catch (ex) { view.innerHTML = `<div class="empty"><div class="big">⚠</div>${esc(ex.message)}</div>`; }
 }
@@ -105,12 +106,19 @@ async function renderDetail(id) {
           <div class="card-body stack">${w.quotes.map((q) => `<div class="spread">
             <span class="mono">${esc(q.number)}</span><span>${money(q.total)}
             <span class="badge status ${q.status === "approved" ? "ready" : q.status === "rejected" ? "cancelled" : "quote_pending"}">${esc(q.status)}</span></span></div>`).join("")}</div></div>` : ""}
+        ${(w.invoices || []).length ? `<div class="card"><div class="card-head"><h3>Invoices</h3></div>
+          <div class="card-body stack">${w.invoices.map((i) => `<div class="spread">
+            <span class="mono">${esc(i.number)}</span>
+            <span>${money(i.total)} <span class="badge status ${i.status === "paid" ? "ready" : "quote_pending"}">${esc(i.status)}</span>
+            <button class="btn btn-ghost btn-sm" data-inv="${i.id}">⬇ PDF</button></span></div>`).join("")}</div></div>` : ""}
       </div>
     </div>`;
 
   const ap = el("#approveBtn"), rj = el("#rejectBtn");
   if (ap) ap.addEventListener("click", () => decide(pendingQuote.id, true, id));
   if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id));
+  els("[data-inv]").forEach((b) =>
+    b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
 }
 
 function bigTracker(status) {
@@ -180,6 +188,30 @@ async function renderEquipment() {
           <dt>Repairs</dt><dd>${counts[e.id] || 0} on record</dd></dl></div>`).join("") ||
       '<div class="empty"><div class="big">⚙️</div>No equipment on file.</div>'}
     </div>`;
+}
+
+/* ---------- invoices ---------- */
+async function renderInvoices() {
+  loading();
+  const list = await api.portalInvoices();
+  const due = list.filter((i) => i.status !== "paid").reduce((s, i) => s + i.total, 0);
+  view.innerHTML = `
+    <div class="page-title"><h1>My invoices</h1>
+      ${due ? `<div class="stat warn" style="padding:10px 16px"><div class="stat-label">Balance due</div>
+        <div class="stat-value" style="font-size:1.4rem">${money(due)}</div></div>` : ""}</div>
+    <div class="card"><div class="table-wrap"><table class="data">
+      <thead><tr><th>Invoice #</th><th>Status</th><th class="text-right">Total</th><th>Due</th><th></th></tr></thead>
+      <tbody>${list.map((i) => `<tr data-nostyle>
+        <td class="mono">${esc(i.number)}</td>
+        <td><span class="badge status ${i.status === "paid" ? "ready" : "quote_pending"}">${esc(i.status)}</span></td>
+        <td class="text-right mono">${money(i.total)}</td>
+        <td class="muted nowrap">${fmtDate(i.due_date)}</td>
+        <td class="text-right"><button class="btn btn-ghost btn-sm" data-inv="${i.id}">⬇ Download PDF</button></td></tr>`).join("") ||
+      '<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">No invoices yet.</td></tr>'}
+      </tbody></table></div></div>`;
+  els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
+  els("[data-inv]").forEach((b) =>
+    b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
 }
 
 boot();

@@ -5,10 +5,11 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models import Equipment, Quote, User, UserRole, WorkOrder
+from app.models import Equipment, Invoice, Quote, User, UserRole, WorkOrder
 from app.schemas import (
     EquipmentOut,
     EventOut,
+    InvoiceOut,
     QuoteDecision,
     QuoteOut,
     WorkOrderDetail,
@@ -53,6 +54,7 @@ def my_work_order_detail(wo_id: int, db: Session = Depends(get_db), user: User =
             selectinload(WorkOrder.events),
             selectinload(WorkOrder.findings),
             selectinload(WorkOrder.quotes).selectinload(Quote.lines),
+            selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
         )
     )
     if not wo:
@@ -60,6 +62,17 @@ def my_work_order_detail(wo_id: int, db: Session = Depends(get_db), user: User =
     # Hide internal-only events from the customer.
     wo.events = [e for e in wo.events if e.visible_to_customer]
     return wo
+
+
+@router.get("/invoices", response_model=list[InvoiceOut])
+def my_invoices(db: Session = Depends(get_db), user: User = Depends(require_portal)):
+    stmt = (
+        select(Invoice)
+        .where(Invoice.organization_id == user.organization_id, Invoice.customer_id == user.customer_id)
+        .options(selectinload(Invoice.lines))
+        .order_by(Invoice.issued_at.desc())
+    )
+    return db.scalars(stmt).all()
 
 
 @router.get("/equipment", response_model=list[EquipmentOut])

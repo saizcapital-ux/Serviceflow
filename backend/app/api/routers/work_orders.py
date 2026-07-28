@@ -9,6 +9,7 @@ from app.models import (
     Equipment,
     EventType,
     Finding,
+    Invoice,
     Quote,
     QuoteLine,
     QuoteStatus,
@@ -43,6 +44,7 @@ def _load_detail(db: Session, wo_id: int, org_id: int) -> WorkOrder:
             selectinload(WorkOrder.events),
             selectinload(WorkOrder.findings),
             selectinload(WorkOrder.quotes).selectinload(Quote.lines),
+            selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
         )
     )
     if not wo:

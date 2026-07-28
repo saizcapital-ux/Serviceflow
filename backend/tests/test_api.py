@@ -71,3 +71,45 @@ def test_portal_quote_approval_advances_work_order(client, staff_headers, portal
 
     after = client.get(f"/api/portal/work-orders/{target['id']}", headers=portal_headers).json()
     assert after["status"] == "approved"
+
+
+def _acme_id(client, staff_headers):
+    return client.get("/api/customers", headers=staff_headers).json()[0]["id"]
+
+
+def test_invoice_from_approved_quote_and_pdf(client, staff_headers):
+    # WO-2026-0001 has an approved quote in the seed.
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = next(w for w in wos if w["number"] == "WO-2026-0001")
+    created = client.post(f"/api/work-orders/{wo['id']}/invoices", headers=staff_headers,
+                          json={"due_in_days": 30, "notes": "Net 30"})
+    assert created.status_code == 201, created.text
+    inv = created.json()
+    assert inv["number"].startswith("INV-")
+    assert inv["total"] > 0 and len(inv["lines"]) == 3
+
+    # PDF export returns a real PDF
+    pdf = client.get(f"/api/invoices/{inv['id']}/pdf", headers=staff_headers)
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"] == "application/pdf"
+    assert pdf.content[:4] == b"%PDF"
+
+    # Mark paid
+    paid = client.post(f"/api/invoices/{inv['id']}/paid", headers=staff_headers, json={"paid": True})
+    assert paid.status_code == 200 and paid.json()["status"] == "paid"
+
+
+def test_invoice_requires_approved_quote(client, staff_headers):
+    # WO-2026-0003 (field service) has no approved quote.
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = next(w for w in wos if w["number"] == "WO-2026-0003")
+    r = client.post(f"/api/work-orders/{wo['id']}/invoices", headers=staff_headers, json={})
+    assert r.status_code == 409
+
+
+def test_portal_invoices_scoped_and_pdf_access(client, staff_headers, portal_headers):
+    invs = client.get("/api/portal/invoices", headers=portal_headers).json()
+    assert any(i["number"] == "INV-2025-0031" for i in invs)  # Acme's paid invoice
+    # Portal can download its own invoice PDF
+    inv_id = invs[0]["id"]
+    assert client.get(f"/api/invoices/{inv_id}/pdf", headers=portal_headers).status_code == 200

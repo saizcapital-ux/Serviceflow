@@ -23,6 +23,7 @@ from app.models.enums import (
     EquipmentType,
     EventType,
     FindingSeverity,
+    InvoiceStatus,
     Priority,
     QuoteStatus,
     ServiceType,
@@ -151,6 +152,7 @@ class WorkOrder(Base):
     )
     findings: Mapped[list[Finding]] = relationship(back_populates="work_order", cascade="all, delete-orphan")
     quotes: Mapped[list[Quote]] = relationship(back_populates="work_order", cascade="all, delete-orphan")
+    invoices: Mapped[list[Invoice]] = relationship(back_populates="work_order", cascade="all, delete-orphan")
     time_entries: Mapped[list[TimeEntry]] = relationship(
         back_populates="work_order", cascade="all, delete-orphan"
     )
@@ -220,6 +222,42 @@ class QuoteLine(Base):
     line_total: Mapped[float] = mapped_column(Float, default=0.0)
 
     quote: Mapped[Quote] = relationship(back_populates="lines")
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+    __table_args__ = (UniqueConstraint("organization_id", "number", name="uq_invoice_org_number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    number: Mapped[str] = mapped_column(String(40), nullable=False)
+    work_order_id: Mapped[int] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    status: Mapped[InvoiceStatus] = mapped_column(Enum(InvoiceStatus), default=InvoiceStatus.sent, index=True)
+    subtotal: Mapped[float] = mapped_column(Float, default=0.0)
+    tax: Mapped[float] = mapped_column(Float, default=0.0)
+    total: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[str | None] = mapped_column(Text)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    work_order: Mapped[WorkOrder] = relationship(back_populates="invoices")
+    lines: Mapped[list[InvoiceLine]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
+
+
+class InvoiceLine(Base):
+    __tablename__ = "invoice_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="labor")  # labor | part | misc
+    description: Mapped[str] = mapped_column(String(300), nullable=False)
+    quantity: Mapped[float] = mapped_column(Float, default=1.0)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    line_total: Mapped[float] = mapped_column(Float, default=0.0)
+
+    invoice: Mapped[Invoice] = relationship(back_populates="lines")
 
 
 class TimeEntry(Base):

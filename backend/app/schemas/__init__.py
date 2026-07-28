@@ -9,6 +9,7 @@ from app.models.enums import (
     EquipmentType,
     EventType,
     FindingSeverity,
+    InvoiceStatus,
     Priority,
     QuoteStatus,
     ServiceType,
@@ -176,6 +177,42 @@ class QuoteDecision(BaseModel):
     note: str | None = None
 
 
+class InvoiceLineOut(ORMModel):
+    id: int
+    kind: str
+    description: str
+    quantity: float
+    unit_price: float
+    line_total: float
+
+
+class InvoiceOut(ORMModel):
+    id: int
+    number: str
+    status: InvoiceStatus
+    subtotal: float
+    tax: float
+    total: float
+    notes: str | None = None
+    due_date: date | None = None
+    issued_at: datetime
+    paid_at: datetime | None = None
+    work_order_id: int
+    customer_id: int
+    lines: list[InvoiceLineOut] = []
+
+
+class InvoiceCreate(BaseModel):
+    """Create an invoice from the work order's approved quote (or all approved lines)."""
+    quote_id: int | None = None  # defaults to the most recent approved quote
+    due_in_days: int = 30
+    notes: str | None = None
+
+
+class MarkPaid(BaseModel):
+    paid: bool = True
+
+
 class WorkOrderSummary(ORMModel):
     id: int
     number: str
@@ -201,6 +238,7 @@ class WorkOrderDetail(WorkOrderSummary):
     events: list[EventOut] = []
     findings: list[FindingOut] = []
     quotes: list[QuoteOut] = []
+    invoices: list[InvoiceOut] = []
 
 
 # ---------- Dashboard ----------

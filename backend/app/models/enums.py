@@ -69,3 +69,10 @@ class QuoteStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     expired = "expired"
+
+
+class InvoiceStatus(str, enum.Enum):
+    draft = "draft"
+    sent = "sent"
+    paid = "paid"
+    void = "void"

@@ -4,7 +4,7 @@ Run:  python -m app.seed
 Creates one service center, staff + a portal customer, equipment, and work
 orders spanning the full lifecycle so the UI has something to show.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
 
@@ -18,6 +18,9 @@ from app.models import (
     EventType,
     Finding,
     FindingSeverity,
+    Invoice,
+    InvoiceLine,
+    InvoiceStatus,
     Organization,
     Priority,
     Quote,
@@ -195,14 +198,27 @@ def seed() -> None:
                  WorkOrderStatus.ready],
                 ServiceType.shop_repair, Priority.normal, assigned=tech, promised_offset=1)
 
-        # 5) Older closed motor job (history)
-        make_wo("WO-2025-0288", acme, motor,
-                "Annual PM — 250HP motor bearing greasing & testing",
-                "Routine preventive maintenance and surge test.",
-                [WorkOrderStatus.intake, WorkOrderStatus.inspection, WorkOrderStatus.in_repair,
-                 WorkOrderStatus.testing, WorkOrderStatus.ready, WorkOrderStatus.shipped,
-                 WorkOrderStatus.closed],
-                ServiceType.shop_repair, Priority.low, assigned=tech, promised_offset=-30)
+        # 5) Older closed motor job (history) — invoiced & paid
+        wo5 = make_wo("WO-2025-0288", acme, motor,
+                      "Annual PM — 250HP motor bearing greasing & testing",
+                      "Routine preventive maintenance and surge test.",
+                      [WorkOrderStatus.intake, WorkOrderStatus.inspection, WorkOrderStatus.in_repair,
+                       WorkOrderStatus.testing, WorkOrderStatus.ready, WorkOrderStatus.shipped,
+                       WorkOrderStatus.closed],
+                      ServiceType.shop_repair, Priority.low, assigned=tech, promised_offset=-30)
+        inv = Invoice(organization_id=org.id, number="INV-2025-0031", work_order_id=wo5.id,
+                      customer_id=acme.id, status=InvoiceStatus.paid, subtotal=640, tax=52.80,
+                      total=692.80, due_date=today - timedelta(days=15),
+                      paid_at=datetime.now(timezone.utc) - timedelta(days=20),
+                      notes="Net 30. Thank you.")
+        db.add(inv); db.flush()
+        inv.lines = [
+            InvoiceLine(invoice_id=inv.id, kind="labor", description="Preventive maintenance & surge test",
+                        quantity=4, unit_price=135, line_total=540),
+            InvoiceLine(invoice_id=inv.id, kind="part", description="Bearing grease & consumables",
+                        quantity=1, unit_price=100, line_total=100),
+        ]
+        wo5.total_actual = 692.80
 
         db.commit()
         print("Seed complete.")
