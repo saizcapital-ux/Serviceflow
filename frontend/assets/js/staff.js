@@ -43,6 +43,7 @@ async function router() {
     if (route === "field") return renderDispatch();
     if (route === "customers") return renderCustomers();
     if (route === "equipment") return renderEquipment();
+    if (route === "inventory") return renderInventory();
     if (route === "invoices") return renderInvoices();
     if (route === "notifications") return renderNotifications();
     if (route === "billing") return renderBilling();
@@ -213,6 +214,9 @@ async function renderWorkOrder(id) {
               <div class="muted" style="grid-column:1/-1">Loading costing…</div></div>
             ${timeEntries}
           </div></div>
+        <div class="card"><div class="card-head"><h3>Parts used</h3>
+          <button class="btn btn-ghost btn-sm" id="usePart">+ Use part</button></div>
+          <div class="card-body" id="partsUsed"><p class="muted">Loading…</p></div></div>
         <div class="card"><div class="card-head"><h3>Invoices</h3>
           ${hasApprovedQuote ? '<button class="btn btn-accent btn-sm" id="newInvoice">+ Create invoice</button>' : ""}</div>
           <div class="card-body stack">${invoices}</div></div>
@@ -240,6 +244,8 @@ async function renderWorkOrder(id) {
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
   el("#logTime").addEventListener("click", () => openLogTime(w.id));
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
+  el("#usePart").addEventListener("click", () => openUsePart(w.id));
+  loadPartsUsed(w);
   const sb = el("#schedBtn");
   if (sb) sb.addEventListener("click", async () =>
     openSchedule(w.id, techCache || (techCache = await api.users("technician")), () => renderWorkOrder(w.id)));
@@ -288,6 +294,43 @@ function openUpload(woId) {
     try {
       await uploadAttachment(woId, f, el("#uk", m.root).value);
       m.close(); toast("Uploaded", "ok"); renderWorkOrder(woId);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
+async function loadPartsUsed(w) {
+  const box = el("#partsUsed");
+  if (!box) return;
+  const used = w.parts_used || [];
+  if (!used.length) { box.innerHTML = '<p class="muted">No parts consumed yet.</p>'; return; }
+  const parts = partsCache || (partsCache = await api.parts());
+  const byId = Object.fromEntries(parts.map((p) => [p.id, p]));
+  box.innerHTML = used.map((u) => {
+    const p = byId[u.part_id];
+    return `<div class="spread" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <div><strong>${u.quantity} ×</strong> ${esc(p ? p.name : "Part #" + u.part_id)}
+        ${p ? `<span class="muted mono" style="font-size:.8rem">${esc(p.sku)}</span>` : ""}</div>
+      <span class="mono">${money(u.quantity * u.unit_price)}</span></div>`;
+  }).join("");
+}
+
+async function openUsePart(woId) {
+  const parts = (partsCache || (partsCache = await api.parts())).filter((p) => p.quantity_on_hand > 0);
+  if (!parts.length) return toast("No parts in stock. Add inventory first.", "err");
+  const m = modal(`<div class="card-head"><h3>Use a part on this job</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Part</span><select id="up">
+        ${parts.map((p) => `<option value="${p.id}">${esc(p.sku)} — ${esc(p.name)} (${p.quantity_on_hand} in stock)</option>`).join("")}</select></label>
+      <label class="field" style="max-width:140px"><span>Quantity</span><input type="number" id="uq" value="1" min="1" /></label>
+      <p class="muted" style="font-size:.82rem">This decrements inventory stock.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="ucx">Cancel</button>
+        <button class="btn btn-primary" id="uok">Use part</button></div></div>`);
+  el("#ucx", m.root).onclick = m.close;
+  el("#uok", m.root).onclick = async () => {
+    try {
+      await api.consumePart(woId, { part_id: +el("#up", m.root).value, quantity: +el("#uq", m.root).value || 1 });
+      partsCache = null; // stock changed
+      m.close(); toast("Part recorded", "ok"); renderWorkOrder(woId);
     } catch (ex) { toast(ex.message, "err"); }
   };
 }
@@ -686,6 +729,88 @@ function openSchedule(woId, techs, after) {
         notify_customer: el("#snotify", m.root).checked,
       });
       m.close(); toast("Visit scheduled", "ok"); refresh();
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
+/* ---------- inventory ---------- */
+let partsCache = null;
+
+async function renderInventory(lowOnly = false) {
+  loading();
+  const list = await api.parts(lowOnly ? { low_stock: true } : {});
+  partsCache = await api.parts();
+  const lowCount = partsCache.filter((p) => p.quantity_on_hand <= p.reorder_point).length;
+  view.innerHTML = `
+    <div class="page-title"><h1>Inventory</h1>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm ${lowOnly ? "" : ""}" id="lowToggle"
+          style="${lowOnly ? "border-color:var(--accent-500);color:var(--accent-600)" : ""}">⚠ Low stock (${lowCount})</button>
+        <button class="btn btn-primary btn-sm" id="addPart">+ Add part</button>
+      </div></div>
+    <div class="card"><div class="table-wrap"><table class="data">
+      <thead><tr><th>SKU</th><th>Part</th><th>Location</th><th class="text-right">On hand</th><th class="text-right">Reorder</th><th class="text-right">Unit price</th><th></th></tr></thead>
+      <tbody>${list.map((p) => {
+        const low = p.quantity_on_hand <= p.reorder_point;
+        return `<tr data-nostyle>
+          <td class="mono">${esc(p.sku)}</td>
+          <td><strong>${esc(p.name)}</strong>${low ? ' <span class="badge status on_hold">Low</span>' : ""}</td>
+          <td class="muted">${esc(p.location || "—")}</td>
+          <td class="text-right"><strong style="color:${low ? "var(--danger)" : "var(--ink-900)"}">${p.quantity_on_hand}</strong></td>
+          <td class="text-right muted">${p.reorder_point}</td>
+          <td class="text-right mono">${money(p.unit_price)}</td>
+          <td class="text-right nowrap">
+            <button class="btn btn-ghost btn-sm" data-adj="${p.id}" data-d="-1">−</button>
+            <button class="btn btn-ghost btn-sm" data-adj="${p.id}" data-d="1">+</button>
+            <button class="btn btn-ghost btn-sm" data-recv="${p.id}">Receive</button></td></tr>`;
+      }).join("") || '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No parts. Add your catalog.</td></tr>'}
+      </tbody></table></div></div>`;
+  els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
+  el("#addPart").addEventListener("click", openAddPart);
+  el("#lowToggle").addEventListener("click", () => renderInventory(!lowOnly));
+  els("[data-adj]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api.adjustStock(b.dataset.adj, +b.dataset.d); renderInventory(lowOnly); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+  els("[data-recv]").forEach((b) => b.addEventListener("click", async () => {
+    const n = prompt("Receive how many units into stock?", "10");
+    if (n === null) return;
+    const d = parseInt(n, 10);
+    if (!Number.isFinite(d) || d <= 0) return toast("Enter a positive number", "err");
+    try { await api.adjustStock(b.dataset.recv, d, "received"); toast("Stock received", "ok"); renderInventory(lowOnly); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+}
+
+function openAddPart() {
+  const m = modal(`<div class="card-head"><h3>Add part</h3></div>
+    <div class="card-body stack">
+      <div class="row">
+        <label class="field grow"><span>SKU</span><input id="psku" placeholder="BRG-6314" /></label>
+        <label class="field grow"><span>Location</span><input id="ploc" placeholder="Bin A-12" /></label>
+      </div>
+      <label class="field"><span>Name</span><input id="pname" placeholder="Bearing 6314 (DE)" /></label>
+      <div class="row">
+        <label class="field grow"><span>Unit cost</span><input type="number" id="pcost" value="0" step="0.01" /></label>
+        <label class="field grow"><span>Unit price</span><input type="number" id="pprice" value="0" step="0.01" /></label>
+      </div>
+      <div class="row">
+        <label class="field grow"><span>On hand</span><input type="number" id="pqty" value="0" /></label>
+        <label class="field grow"><span>Reorder point</span><input type="number" id="preorder" value="0" /></label>
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="pcx">Cancel</button>
+        <button class="btn btn-primary" id="pok">Add part</button></div></div>`);
+  el("#pcx", m.root).onclick = m.close;
+  el("#pok", m.root).onclick = async () => {
+    const sku = el("#psku", m.root).value.trim(), name = el("#pname", m.root).value.trim();
+    if (!sku || !name) return toast("SKU and name are required", "err");
+    try {
+      await api.createPart({
+        sku, name, location: el("#ploc", m.root).value.trim() || null,
+        unit_cost: +el("#pcost", m.root).value || 0, unit_price: +el("#pprice", m.root).value || 0,
+        quantity_on_hand: +el("#pqty", m.root).value || 0, reorder_point: +el("#preorder", m.root).value || 0,
+      });
+      m.close(); toast("Part added", "ok"); renderInventory();
     } catch (ex) { toast(ex.message, "err"); }
   };
 }

@@ -56,6 +56,14 @@ export const api = {
   // labor & costing
   logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),
   costing: (woId) => request(`/api/work-orders/${woId}/costing`),
+  // parts & inventory
+  parts: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/parts${qs ? `?${qs}` : ""}`);
+  },
+  createPart: (b) => request("/api/parts", { method: "POST", body: b }),
+  adjustStock: (id, delta, reason) => request(`/api/parts/${id}/adjust`, { method: "POST", body: { delta, reason } }),
+  consumePart: (woId, b) => request(`/api/work-orders/${woId}/parts`, { method: "POST", body: b }),
   // analytics
   analytics: () => request("/api/analytics/summary"),
   // billing (SaaS subscription)

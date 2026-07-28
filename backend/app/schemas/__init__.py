@@ -215,6 +215,55 @@ class MarkPaid(BaseModel):
     paid: bool = True
 
 
+class PartBase(BaseModel):
+    sku: str
+    name: str
+    description: str | None = None
+    unit_cost: float = 0.0
+    unit_price: float = 0.0
+    quantity_on_hand: int = 0
+    reorder_point: int = 0
+    location: str | None = None
+
+
+class PartCreate(PartBase):
+    pass
+
+
+class PartUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    unit_cost: float | None = None
+    unit_price: float | None = None
+    quantity_on_hand: int | None = None
+    reorder_point: int | None = None
+    location: str | None = None
+
+
+class PartOut(ORMModel, PartBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+
+
+class PartAdjust(BaseModel):
+    delta: int  # +receive / -consume/scrap
+    reason: str | None = None
+
+
+class PartUsageCreate(BaseModel):
+    part_id: int
+    quantity: int = Field(gt=0)
+
+
+class PartUsageOut(ORMModel):
+    id: int
+    part_id: int
+    quantity: int
+    unit_price: float
+    created_at: datetime
+
+
 class NotificationOut(ORMModel):
     id: int
     channel: NotificationChannel
@@ -324,6 +373,7 @@ class WorkOrderDetail(WorkOrderSummary):
     invoices: list[InvoiceOut] = []
     time_entries: list[TimeEntryOut] = []
     attachments: list[AttachmentOut] = []
+    parts_used: list[PartUsageOut] = []
 
 
 # ---------- Dashboard ----------

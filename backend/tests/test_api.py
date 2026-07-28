@@ -107,6 +107,37 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_parts_catalog_and_low_stock(client, staff_headers):
+    parts = client.get("/api/parts", headers=staff_headers).json()
+    assert parts, "seed should include parts"
+    low = client.get("/api/parts?low_stock=true", headers=staff_headers).json()
+    # BRG-6314N (6 on hand, reorder 8) and SEAL-KIT-3196 (3/4) are below reorder
+    low_skus = {p["sku"] for p in low}
+    assert "BRG-6314N" in low_skus and "SEAL-KIT-3196" in low_skus
+
+
+def test_create_part_duplicate_sku_rejected(client, staff_headers):
+    body = {"sku": "TST-UNIQUE", "name": "Test part", "quantity_on_hand": 5, "reorder_point": 2}
+    assert client.post("/api/parts", headers=staff_headers, json=body).status_code == 201
+    assert client.post("/api/parts", headers=staff_headers, json=body).status_code == 409
+
+
+def test_consume_part_decrements_stock(client, staff_headers):
+    part = client.post("/api/parts", headers=staff_headers,
+                       json={"sku": "CONS-1", "name": "Consumable", "quantity_on_hand": 5,
+                             "unit_price": 10.0}).json()
+    wo = client.get("/api/work-orders", headers=staff_headers).json()[0]
+    r = client.post(f"/api/work-orders/{wo['id']}/parts", headers=staff_headers,
+                    json={"part_id": part["id"], "quantity": 3})
+    assert r.status_code == 201
+    after = client.get("/api/parts?q=CONS-1", headers=staff_headers).json()[0]
+    assert after["quantity_on_hand"] == 2
+    # Over-consume is rejected
+    bad = client.post(f"/api/work-orders/{wo['id']}/parts", headers=staff_headers,
+                      json={"part_id": part["id"], "quantity": 99})
+    assert bad.status_code == 409
+
+
 def test_analytics_summary(client, staff_headers):
     a = client.get("/api/analytics/summary", headers=staff_headers).json()
     assert set(a) >= {"completed_30d", "avg_turnaround_days", "revenue_by_month",

@@ -13,6 +13,8 @@ from app.models import (
     Finding,
     Invoice,
     Organization,
+    Part,
+    PartUsage,
     Quote,
     QuoteLine,
     QuoteStatus,
@@ -26,6 +28,8 @@ from app.schemas import (
     CostingSummary,
     FindingCreate,
     FindingOut,
+    PartUsageCreate,
+    PartUsageOut,
     QuoteCreate,
     QuoteOut,
     ScheduleRequest,
@@ -54,6 +58,7 @@ def _load_detail(db: Session, wo_id: int, org_id: int) -> WorkOrder:
             selectinload(WorkOrder.quotes).selectinload(Quote.lines),
             selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
             selectinload(WorkOrder.time_entries),
+            selectinload(WorkOrder.parts_used),
             selectinload(WorkOrder.attachments),
         )
     )
@@ -247,6 +252,24 @@ def log_time(wo_id: int, payload: TimeEntryCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(entry)
     return entry
+
+
+@router.post("/{wo_id}/parts", response_model=PartUsageOut, status_code=status.HTTP_201_CREATED)
+def consume_part(wo_id: int, payload: PartUsageCreate, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Record part usage on a job and decrement inventory stock."""
+    wo = _load_detail(db, wo_id, user.organization_id)
+    part = db.scalar(select(Part).where(Part.id == payload.part_id, Part.organization_id == user.organization_id))
+    if not part:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Part not found.")
+    if part.quantity_on_hand < payload.quantity:
+        raise HTTPException(status.HTTP_409_CONFLICT, f"Only {part.quantity_on_hand} of {part.sku} in stock.")
+    part.quantity_on_hand -= payload.quantity
+    usage = PartUsage(work_order_id=wo.id, part_id=part.id, quantity=payload.quantity,
+                      unit_price=part.unit_price, used_by=user.id)
+    db.add(usage)
+    db.commit()
+    db.refresh(usage)
+    return usage
 
 
 @router.get("/{wo_id}/costing", response_model=CostingSummary)

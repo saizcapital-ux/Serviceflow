@@ -26,6 +26,7 @@ from app.models import (
     NotificationChannel,
     NotificationStatus,
     Organization,
+    Part,
     Priority,
     Quote,
     QuoteLine,
@@ -265,6 +266,25 @@ def seed() -> None:
                         quantity=1, unit_price=100, line_total=100),
         ]
         wo5.total_actual = 692.80
+
+        # Parts / inventory catalog (one intentionally below reorder point).
+        db.add_all([
+            Part(organization_id=org.id, sku="BRG-6314", name="Bearing 6314 (DE)",
+                 description="Deep-groove ball bearing, 70mm bore", unit_cost=32.0, unit_price=68.0,
+                 quantity_on_hand=24, reorder_point=8, location="Bin A-12"),
+            Part(organization_id=org.id, sku="BRG-6314N", name="Bearing 6314 (NDE)",
+                 description="Deep-groove ball bearing, insulated", unit_cost=41.0, unit_price=86.0,
+                 quantity_on_hand=6, reorder_point=8, location="Bin A-13"),
+            Part(organization_id=org.id, sku="MW-14AWG", name="Magnet wire 14 AWG (lb)",
+                 description="Class H magnet wire", unit_cost=9.5, unit_price=18.0,
+                 quantity_on_hand=140, reorder_point=50, location="Rack C"),
+            Part(organization_id=org.id, sku="SEAL-KIT-3196", name="Seal kit — Goulds 3196",
+                 description="Mechanical seal rebuild kit", unit_cost=120.0, unit_price=260.0,
+                 quantity_on_hand=3, reorder_point=4, location="Bin D-04"),
+            Part(organization_id=org.id, sku="TQ-SW-SMB", name="Limitorque torque switch",
+                 description="SMB torque switch assembly", unit_cost=180.0, unit_price=340.0,
+                 quantity_on_hand=5, reorder_point=2, location="Bin E-01"),
+        ])
 
         db.flush()
         # Backdate the closed job's start so turnaround reads realistically

@@ -167,6 +167,9 @@ class WorkOrder(Base):
     time_entries: Mapped[list[TimeEntry]] = relationship(
         back_populates="work_order", cascade="all, delete-orphan"
     )
+    parts_used: Mapped[list[PartUsage]] = relationship(
+        back_populates="work_order", cascade="all, delete-orphan"
+    )
     attachments: Mapped[list[Attachment]] = relationship(
         back_populates="work_order", cascade="all, delete-orphan"
     )
@@ -269,6 +272,39 @@ class InvoiceLine(Base):
     line_total: Mapped[float] = mapped_column(Float, default=0.0)
 
     invoice: Mapped[Invoice] = relationship(back_populates="lines")
+
+
+class Part(Base):
+    __tablename__ = "parts"
+    __table_args__ = (UniqueConstraint("organization_id", "sku", name="uq_part_org_sku"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    sku: Mapped[str] = mapped_column(String(60), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    unit_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    quantity_on_hand: Mapped[int] = mapped_column(Integer, default=0)
+    reorder_point: Mapped[int] = mapped_column(Integer, default=0)
+    location: Mapped[str | None] = mapped_column(String(120))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PartUsage(Base):
+    __tablename__ = "part_usages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_order_id: Mapped[int] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    part_id: Mapped[int] = mapped_column(ForeignKey("parts.id"), index=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    work_order: Mapped[WorkOrder] = relationship(back_populates="parts_used")
+    part: Mapped[Part] = relationship()
 
 
 class Notification(Base):
