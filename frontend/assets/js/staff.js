@@ -46,6 +46,7 @@ async function router() {
     if (route === "invoices") return renderInvoices();
     if (route === "notifications") return renderNotifications();
     if (route === "billing") return renderBilling();
+    if (route === "analytics") return renderAnalytics();
     renderDashboard();
   } catch (ex) { view.innerHTML = `<div class="empty"><div class="big">⚠</div>${esc(ex.message)}</div>`; }
 }
@@ -687,6 +688,76 @@ function openSchedule(woId, techs, after) {
       m.close(); toast("Visit scheduled", "ok"); refresh();
     } catch (ex) { toast(ex.message, "err"); }
   };
+}
+
+/* ---------- analytics ---------- */
+// Horizontal magnitude bars: identity via text label, magnitude via length,
+// single hue (or a per-row color for the reserved status palette).
+function hbars(rows, { fmt = (v) => v, color } = {}) {
+  const max = Math.max(1, ...rows.map((r) => r.value));
+  return `<div class="stack" style="gap:10px">${rows.map((r) => `
+    <div>
+      <div class="spread" style="font-size:.85rem;margin-bottom:3px">
+        <span>${esc(r.label)}</span><strong>${fmt(r.value)}</strong></div>
+      <div style="background:var(--surface-3);border-radius:5px;height:12px" title="${esc(r.label)}: ${fmt(r.value)}">
+        <div style="width:${Math.max(2, (r.value / max) * 100)}%;height:100%;border-radius:5px;background:${r.color || color || "var(--brand-500)"}"></div>
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+function revenueChart(data) {
+  const w = 520, h = 200, pad = 34, bw = (w - pad * 2) / data.length;
+  const max = Math.max(1, ...data.map((d) => d.revenue));
+  const bars = data.map((d, i) => {
+    const bh = (d.revenue / max) * (h - pad - 20);
+    const x = pad + i * bw, y = h - pad - bh;
+    const label = new Date(d.month + "-01").toLocaleDateString("en-US", { month: "short" });
+    return `<g>
+      <rect x="${x + 6}" y="${y}" width="${bw - 12}" height="${Math.max(bh, 1)}" rx="4" fill="var(--brand-500)">
+        <title>${label}: ${money(d.revenue)}</title></rect>
+      ${d.revenue > 0 ? `<text x="${x + bw / 2}" y="${y - 5}" text-anchor="middle" font-size="10" fill="var(--ink-500)">${d.revenue >= 1000 ? "$" + (d.revenue / 1000).toFixed(1) + "k" : "$" + d.revenue.toFixed(0)}</text>` : ""}
+      <text x="${x + bw / 2}" y="${h - pad + 14}" text-anchor="middle" font-size="10" fill="var(--ink-500)">${label}</text>
+    </g>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto" role="img" aria-label="Revenue by month">
+    <line x1="${pad}" y1="${h - pad}" x2="${w - pad}" y2="${h - pad}" stroke="var(--line)" stroke-width="1"/>
+    ${bars}</svg>`;
+}
+
+async function renderAnalytics() {
+  loading();
+  const a = await api.analytics();
+  const stat = (label, val, cls = "", sub = "") =>
+    `<div class="stat ${cls}"><div class="stat-label">${label}</div>
+     <div class="stat-value">${val}</div><div class="stat-sub">${sub}</div></div>`;
+  const statusRows = Object.entries(a.status_counts)
+    .sort((x, y) => y[1] - x[1])
+    .map(([s, c]) => ({ label: STATUS_LABEL[s] || s, value: c, color: `var(--st-${s === "quote_pending" ? "quote" : s === "in_repair" ? "repair" : s === "on_hold" ? "hold" : s})` }));
+  const typeRows = Object.entries(a.by_type).sort((x, y) => y[1] - x[1])
+    .map(([t, c]) => ({ label: (TYPE_LABEL[t] || t), value: c }));
+  const workloadRows = a.tech_workload.map((r) => ({ label: r.technician, value: r.hours }));
+
+  view.innerHTML = `
+    <div class="page-title"><h1>Analytics</h1><span class="muted">Shop performance at a glance</span></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:22px">
+      ${stat("Completed (30d)", a.completed_30d, "ok", `${a.completed_90d} in last 90d`)}
+      ${stat("Avg turnaround", `${a.avg_turnaround_days}d`, "", "intake → shipped")}
+      ${stat("Open jobs", a.open_total, "warn", "in shop &amp; field")}
+      ${stat("Paid revenue", money(a.paid_revenue), "ok", "collected")}
+      ${stat("Outstanding", money(a.outstanding_revenue), "accent", "awaiting payment")}
+    </div>
+    <div class="grid" style="grid-template-columns:1.4fr 1fr;align-items:start">
+      <div class="card"><div class="card-head"><h3>Revenue by month</h3></div>
+        <div class="card-body">${revenueChart(a.revenue_by_month)}</div></div>
+      <div class="card"><div class="card-head"><h3>Open pipeline</h3></div>
+        <div class="card-body">${statusRows.length ? hbars(statusRows) : '<p class="muted">No jobs.</p>'}</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;margin-top:16px;align-items:start">
+      <div class="card"><div class="card-head"><h3>Jobs by equipment type</h3></div>
+        <div class="card-body">${typeRows.length ? hbars(typeRows) : '<p class="muted">No data.</p>'}</div></div>
+      <div class="card"><div class="card-head"><h3>Technician workload</h3></div>
+        <div class="card-body">${workloadRows.length ? hbars(workloadRows, { fmt: (v) => v + "h", color: "var(--st-testing)" }) : '<p class="muted">No labor logged.</p>'}</div></div>
+    </div>`;
 }
 
 /* ---------- billing (SaaS subscription) ---------- */

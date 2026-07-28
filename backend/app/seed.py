@@ -254,6 +254,7 @@ def seed() -> None:
         inv = Invoice(organization_id=org.id, number="INV-2025-0031", work_order_id=wo5.id,
                       customer_id=acme.id, status=InvoiceStatus.paid, subtotal=640, tax=52.80,
                       total=692.80, due_date=today - timedelta(days=15),
+                      issued_at=datetime.now(timezone.utc) - timedelta(days=48),
                       paid_at=datetime.now(timezone.utc) - timedelta(days=20),
                       notes="Net 30. Thank you.")
         db.add(inv); db.flush()
@@ -264,6 +265,11 @@ def seed() -> None:
                         quantity=1, unit_price=100, line_total=100),
         ]
         wo5.total_actual = 692.80
+
+        db.flush()
+        # Backdate the closed job's start so turnaround reads realistically
+        # (updated_at is refreshed to ~now on commit via onupdate).
+        wo5.created_at = datetime.now(timezone.utc) - timedelta(days=9)
 
         db.commit()
         print("Seed complete.")

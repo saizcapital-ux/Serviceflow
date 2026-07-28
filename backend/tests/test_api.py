@@ -107,6 +107,20 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_analytics_summary(client, staff_headers):
+    a = client.get("/api/analytics/summary", headers=staff_headers).json()
+    assert set(a) >= {"completed_30d", "avg_turnaround_days", "revenue_by_month",
+                      "status_counts", "by_type", "tech_workload", "paid_revenue"}
+    assert len(a["revenue_by_month"]) == 6
+    assert a["paid_revenue"] >= 692.8
+    # Priya Nair logged 14.5h in the seed
+    assert any(r["hours"] >= 14.5 for r in a["tech_workload"])
+
+
+def test_analytics_requires_staff(client, portal_headers):
+    assert client.get("/api/analytics/summary", headers=portal_headers).status_code == 403
+
+
 def test_billing_plans_and_mock_checkout(client, staff_headers):
     plans = client.get("/api/billing/plans", headers=staff_headers).json()
     ids = {p["id"] for p in plans}

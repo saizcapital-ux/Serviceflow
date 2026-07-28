@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import (
+    analytics,
     attachments,
     auth,
     billing,
@@ -40,6 +41,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
+app.include_router(analytics.router)
 app.include_router(billing.router)
 app.include_router(team.router)
 app.include_router(customers.router)

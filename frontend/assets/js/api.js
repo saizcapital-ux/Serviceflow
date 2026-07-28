@@ -56,6 +56,8 @@ export const api = {
   // labor & costing
   logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),
   costing: (woId) => request(`/api/work-orders/${woId}/costing`),
+  // analytics
+  analytics: () => request("/api/analytics/summary"),
   // billing (SaaS subscription)
   plans: () => request("/api/billing/plans"),
   subscription: () => request("/api/billing/subscription"),
