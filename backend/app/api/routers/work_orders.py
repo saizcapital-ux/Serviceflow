@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import require_staff
 from app.core.database import get_db
 from app.models import (
+    ChecklistItem,
+    ChecklistTemplate,
     Equipment,
     EventType,
     Finding,
@@ -25,6 +27,7 @@ from app.models import (
     WorkOrderStatus,
 )
 from app.schemas import (
+    ApplyTemplate,
     CostingSummary,
     FindingCreate,
     FindingOut,
@@ -59,6 +62,7 @@ def _load_detail(db: Session, wo_id: int, org_id: int) -> WorkOrder:
             selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
             selectinload(WorkOrder.time_entries),
             selectinload(WorkOrder.parts_used),
+            selectinload(WorkOrder.checklist_items),
             selectinload(WorkOrder.attachments),
         )
     )
@@ -255,6 +259,25 @@ def log_time(wo_id: int, payload: TimeEntryCreate, db: Session = Depends(get_db)
     db.commit()
     db.refresh(entry)
     return entry
+
+
+@router.post("/{wo_id}/checklist/apply", response_model=WorkOrderDetail)
+def apply_checklist(wo_id: int, payload: ApplyTemplate, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Instantiate a traveler template's steps as checklist items on this job."""
+    wo = _load_detail(db, wo_id, user.organization_id)
+    tmpl = db.scalar(
+        select(ChecklistTemplate).where(
+            ChecklistTemplate.id == payload.template_id,
+            ChecklistTemplate.organization_id == user.organization_id,
+        )
+    )
+    if not tmpl:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Template not found.")
+    start = len(wo.checklist_items)
+    for i, label in enumerate(tmpl.items):
+        db.add(ChecklistItem(work_order_id=wo.id, label=label, position=start + i))
+    db.commit()
+    return _load_detail(db, wo_id, user.organization_id)
 
 
 @router.post("/{wo_id}/parts", response_model=PartUsageOut, status_code=status.HTTP_201_CREATED)

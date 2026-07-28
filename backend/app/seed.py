@@ -12,6 +12,8 @@ from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 from app.models import (
     Attachment,
+    ChecklistItem,
+    ChecklistTemplate,
     Contact,
     Customer,
     Equipment,
@@ -268,6 +270,22 @@ def seed() -> None:
                         quantity=1, unit_price=100, line_total=100),
         ]
         wo5.total_actual = 692.80
+
+        # Checklist templates (travelers) + apply the motor one to WO-2026-0001.
+        motor_tmpl = ChecklistTemplate(
+            organization_id=org.id, name="Motor rewind traveler", equipment_type=EquipmentType.motor,
+            items=["Incoming inspection & photos", "Record nameplate data", "Megger / surge test",
+                   "Strip & clean core", "Rewind stator", "VPI / bake", "Reassemble & align",
+                   "Run test & vibration check", "Final QC sign-off"])
+        pump_tmpl = ChecklistTemplate(
+            organization_id=org.id, name="Pump overhaul traveler", equipment_type=EquipmentType.pump,
+            items=["Disassemble & inspect", "Measure clearances", "Replace bearings & seals",
+                   "Balance impeller", "Reassemble", "Hydro / performance test", "Final QC sign-off"])
+        db.add_all([motor_tmpl, pump_tmpl])
+        db.flush()
+        for i, label in enumerate(motor_tmpl.items):
+            db.add(ChecklistItem(work_order_id=wo1.id, label=label, position=i,
+                                 is_done=i < 5))  # first 5 steps done on the in-repair job
 
         # Parts / inventory catalog (one intentionally below reorder point).
         db.add_all([

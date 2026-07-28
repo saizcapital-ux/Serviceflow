@@ -7,6 +7,7 @@ from app.api.routers import (
     attachments,
     auth,
     billing,
+    checklists,
     customers,
     dashboard,
     invoices,
@@ -48,6 +49,7 @@ app.include_router(team.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
 app.include_router(parts.router)
+app.include_router(checklists.router)
 app.include_router(invoices.router)
 app.include_router(attachments.router)
 app.include_router(notifications.router)

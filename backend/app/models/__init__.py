@@ -14,6 +14,8 @@ from app.models.enums import (
 )
 from app.models.tables import (
     Attachment,
+    ChecklistItem,
+    ChecklistTemplate,
     Contact,
     Customer,
     Equipment,
@@ -45,6 +47,8 @@ __all__ = [
     "UserRole",
     "WorkOrderStatus",
     "Attachment",
+    "ChecklistItem",
+    "ChecklistTemplate",
     "Contact",
     "Customer",
     "Equipment",

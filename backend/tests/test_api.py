@@ -134,6 +134,34 @@ def test_staff_can_set_po_number(client, staff_headers):
     assert r.status_code == 200 and r.json()["po_number"] == "PO-STAFF-1"
 
 
+def test_checklist_apply_and_toggle(client, staff_headers):
+    templates = client.get("/api/checklist-templates", headers=staff_headers).json()
+    assert templates, "seed should include traveler templates"
+    tmpl = next(t for t in templates if t["equipment_type"] == "pump")
+    # Apply to a fresh job
+    cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]
+    wo = client.post("/api/work-orders", headers=staff_headers,
+                     json={"customer_id": cid, "title": "Checklist test"}).json()
+    detail = client.post(f"/api/work-orders/{wo['id']}/checklist/apply", headers=staff_headers,
+                         json={"template_id": tmpl["id"]}).json()
+    items = detail["checklist_items"]
+    assert len(items) == len(tmpl["items"])
+    assert all(not it["is_done"] for it in items)
+
+    # Toggle the first item done
+    r = client.patch(f"/api/checklist-items/{items[0]['id']}", headers=staff_headers, json={"is_done": True})
+    assert r.status_code == 200 and r.json()["is_done"] is True
+
+
+def test_seeded_motor_job_has_checklist(client, staff_headers):
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = next(w for w in wos if w["number"] == "WO-2026-0001")
+    detail = client.get(f"/api/work-orders/{wo['id']}", headers=staff_headers).json()
+    items = detail["checklist_items"]
+    assert len(items) == 9  # motor rewind traveler
+    assert sum(1 for it in items if it["is_done"]) == 5
+
+
 def test_equipment_qr_svg(client, staff_headers):
     eq = client.get("/api/equipment", headers=staff_headers).json()[0]
     r = client.get(f"/api/equipment/{eq['id']}/qr.svg", headers=staff_headers)

@@ -202,6 +202,9 @@ async function renderWorkOrder(id) {
       <div class="stack">
         <div class="card"><div class="card-head"><h3>Problem &amp; scope</h3></div>
           <div class="card-body"><p>${esc(w.problem_description || "—")}</p></div></div>
+        <div class="card"><div class="card-head"><h3>Checklist / traveler</h3>
+          <span id="clProgress" class="badge"></span></div>
+          <div class="card-body" id="checklist"><p class="muted">Loading…</p></div></div>
         <div class="card"><div class="card-head"><h3>Inspection findings</h3></div>
           <div class="card-body">${findings}</div></div>
         <div class="card"><div class="card-head"><h3>Attachments &amp; photos</h3>
@@ -252,6 +255,7 @@ async function renderWorkOrder(id) {
   el("#logTime").addEventListener("click", () => openLogTime(w.id));
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
   el("#usePart").addEventListener("click", () => openUsePart(w.id));
+  renderChecklist(w);
   el("#editPo").addEventListener("click", async () => {
     const po = prompt("Customer PO number for this job:", w.po_number || "");
     if (po === null) return;
@@ -308,6 +312,61 @@ function openUpload(woId) {
       await uploadAttachment(woId, f, el("#uk", m.root).value);
       m.close(); toast("Uploaded", "ok"); renderWorkOrder(woId);
     } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
+function renderChecklist(w) {
+  const box = el("#checklist"), prog = el("#clProgress");
+  if (!box) return;
+  const items = w.checklist_items || [];
+  const updateProgress = () => {
+    const done = els("input[data-cl]", box).filter((i) => i.checked).length;
+    const total = items.length;
+    prog.textContent = total ? `${done}/${total}` : "";
+    const bar = el("#clBar", box);
+    if (bar) bar.style.width = total ? `${(done / total) * 100}%` : "0%";
+  };
+  if (!items.length) {
+    box.innerHTML = `<p class="muted" style="margin-bottom:10px">No checklist yet. Apply a traveler template.</p>
+      <button class="btn btn-ghost btn-sm" id="applyTmpl">+ Apply template</button>`;
+    prog.textContent = "";
+    el("#applyTmpl", box).addEventListener("click", () => openApplyTemplate(w));
+    return;
+  }
+  box.innerHTML = `
+    <div style="background:var(--surface-3);border-radius:5px;height:8px;margin-bottom:14px">
+      <div id="clBar" style="height:100%;border-radius:5px;background:var(--ok);transition:width .2s"></div></div>
+    <div class="stack" style="gap:8px">${items.map((it) => `
+      <label class="row" style="gap:10px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" data-cl="${it.id}" ${it.is_done ? "checked" : ""} style="width:auto;margin-top:3px">
+        <span data-lbl="${it.id}" style="${it.is_done ? "text-decoration:line-through;color:var(--ink-400)" : ""}">${esc(it.label)}</span>
+      </label>`).join("")}</div>`;
+  els("input[data-cl]", box).forEach((cb) => cb.addEventListener("change", async () => {
+    const lbl = el(`[data-lbl="${cb.dataset.cl}"]`, box);
+    lbl.style.cssText = cb.checked ? "text-decoration:line-through;color:var(--ink-400)" : "";
+    updateProgress();
+    try { await api.updateChecklistItem(cb.dataset.cl, { is_done: cb.checked }); }
+    catch (e) { toast(e.message, "err"); cb.checked = !cb.checked; lbl.style.cssText = cb.checked ? "text-decoration:line-through;color:var(--ink-400)" : ""; updateProgress(); }
+  }));
+  updateProgress();
+}
+
+async function openApplyTemplate(w) {
+  const templates = await api.checklistTemplates();
+  const eqType = w.equipment?.equipment_type;
+  const relevant = templates.filter((t) => !t.equipment_type || t.equipment_type === eqType);
+  const list = relevant.length ? relevant : templates;
+  if (!list.length) return toast("No templates yet. Create one in settings.", "err");
+  const m = modal(`<div class="card-head"><h3>Apply traveler template</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Template</span><select id="tsel">
+        ${list.map((t) => `<option value="${t.id}">${esc(t.name)} (${t.items.length} steps)</option>`).join("")}</select></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="tcx">Cancel</button>
+        <button class="btn btn-primary" id="tok">Apply</button></div></div>`);
+  el("#tcx", m.root).onclick = m.close;
+  el("#tok", m.root).onclick = async () => {
+    try { await api.applyChecklist(w.id, +el("#tsel", m.root).value); m.close(); toast("Checklist applied", "ok"); renderWorkOrder(w.id); }
+    catch (e) { toast(e.message, "err"); }
   };
 }
 

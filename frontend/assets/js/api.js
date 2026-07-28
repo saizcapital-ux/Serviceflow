@@ -58,6 +58,10 @@ export const api = {
   // labor & costing
   logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),
   costing: (woId) => request(`/api/work-orders/${woId}/costing`),
+  // checklists / travelers
+  checklistTemplates: () => request("/api/checklist-templates"),
+  applyChecklist: (woId, templateId) => request(`/api/work-orders/${woId}/checklist/apply`, { method: "POST", body: { template_id: templateId } }),
+  updateChecklistItem: (itemId, b) => request(`/api/checklist-items/${itemId}`, { method: "PATCH", body: b }),
   // parts & inventory
   parts: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

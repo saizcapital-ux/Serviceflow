@@ -268,6 +268,36 @@ class PartUsageOut(ORMModel):
     created_at: datetime
 
 
+class ChecklistTemplateCreate(BaseModel):
+    name: str
+    equipment_type: EquipmentType | None = None
+    items: list[str]
+
+
+class ChecklistTemplateOut(ORMModel):
+    id: int
+    name: str
+    equipment_type: EquipmentType | None = None
+    items: list[str]
+
+
+class ChecklistItemOut(ORMModel):
+    id: int
+    label: str
+    is_done: bool
+    note: str | None = None
+    position: int
+
+
+class ChecklistItemUpdate(BaseModel):
+    is_done: bool | None = None
+    note: str | None = None
+
+
+class ApplyTemplate(BaseModel):
+    template_id: int
+
+
 class NotificationOut(ORMModel):
     id: int
     channel: NotificationChannel
@@ -379,6 +409,7 @@ class WorkOrderDetail(WorkOrderSummary):
     time_entries: list[TimeEntryOut] = []
     attachments: list[AttachmentOut] = []
     parts_used: list[PartUsageOut] = []
+    checklist_items: list[ChecklistItemOut] = []
 
 
 # ---------- Dashboard ----------

@@ -173,6 +173,9 @@ class WorkOrder(Base):
     parts_used: Mapped[list[PartUsage]] = relationship(
         back_populates="work_order", cascade="all, delete-orphan"
     )
+    checklist_items: Mapped[list[ChecklistItem]] = relationship(
+        back_populates="work_order", cascade="all, delete-orphan", order_by="ChecklistItem.position"
+    )
     attachments: Mapped[list[Attachment]] = relationship(
         back_populates="work_order", cascade="all, delete-orphan"
     )
@@ -275,6 +278,33 @@ class InvoiceLine(Base):
     line_total: Mapped[float] = mapped_column(Float, default=0.0)
 
     invoice: Mapped[Invoice] = relationship(back_populates="lines")
+
+
+class ChecklistTemplate(Base):
+    __tablename__ = "checklist_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Optional: restrict the template to one equipment type (null = any).
+    equipment_type: Mapped[EquipmentType | None] = mapped_column(Enum(EquipmentType))
+    items: Mapped[list] = mapped_column(JSON, default=list)  # list[str] of step labels
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ChecklistItem(Base):
+    __tablename__ = "checklist_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_order_id: Mapped[int] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    label: Mapped[str] = mapped_column(String(300), nullable=False)
+    is_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    work_order: Mapped[WorkOrder] = relationship(back_populates="checklist_items")
 
 
 class Part(Base):
