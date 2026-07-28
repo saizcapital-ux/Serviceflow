@@ -107,6 +107,33 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_po_number_set_and_approval_limit(client, staff_headers, portal_headers):
+    # Acme has an approval_limit of 2000 in the seed. Build a fresh over-limit quote.
+    acme = next(c for c in client.get("/api/customers", headers=staff_headers).json()
+                if c["account_number"] == "ACME-001")
+    assert acme["approval_limit"] == 2000.0
+    wo = client.post("/api/work-orders", headers=staff_headers,
+                     json={"customer_id": acme["id"], "title": "PO limit test"}).json()
+    client.post(f"/api/work-orders/{wo['id']}/status", headers=staff_headers, json={"status": "inspection"})
+    quote = client.post(f"/api/work-orders/{wo['id']}/quotes", headers=staff_headers,
+                        json={"lines": [{"kind": "labor", "description": "Big job", "quantity": 1,
+                                         "unit_price": 5000}], "tax_rate": 0}).json()
+    assert quote["total"] > 2000.0  # exceeds Acme's approval limit
+
+    # Portal approves with a PO number; it should land on the work order.
+    r = client.post(f"/api/portal/quotes/{quote['id']}/decision", headers=portal_headers,
+                    json={"approve": True, "po_number": "PO-99887"})
+    assert r.status_code == 200
+    after = client.get(f"/api/work-orders/{wo['id']}", headers=staff_headers).json()
+    assert after["po_number"] == "PO-99887"
+
+
+def test_staff_can_set_po_number(client, staff_headers):
+    wo = client.get("/api/work-orders", headers=staff_headers).json()[0]
+    r = client.patch(f"/api/work-orders/{wo['id']}", headers=staff_headers, json={"po_number": "PO-STAFF-1"})
+    assert r.status_code == 200 and r.json()["po_number"] == "PO-STAFF-1"
+
+
 def test_equipment_qr_svg(client, staff_headers):
     eq = client.get("/api/equipment", headers=staff_headers).json()[0]
     r = client.get(f"/api/equipment/{eq['id']}/qr.svg", headers=staff_headers)

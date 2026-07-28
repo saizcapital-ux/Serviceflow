@@ -100,6 +100,8 @@ def decide_quote(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not your quote.")
     if quote.status not in ("sent", "draft"):
         raise HTTPException(status.HTTP_409_CONFLICT, "This quote has already been decided.")
+    if payload.po_number:
+        wo.po_number = payload.po_number
     try:
         workflow.apply_quote_decision(
             db, quote, wo, approve=payload.approve, user_id=user.id, note=payload.note

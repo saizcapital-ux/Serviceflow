@@ -174,7 +174,8 @@ async function renderWorkOrder(id) {
       <div><strong>${esc(f.title)}</strong><div class="muted" style="font-size:.85rem">${esc(f.detail || "")}</div></div>
       <span class="badge" style="background:${sevColor(f.severity)};color:#fff">${esc(f.severity)}</span>
     </div>`).join("") || '<p class="muted">No findings recorded.</p>';
-  const quotes = w.quotes.map(quoteBlock).join("") || '<p class="muted">No quotes yet.</p>';
+  const limit = w.customer?.approval_limit;
+  const quotes = w.quotes.map((q) => quoteBlock(q, limit)).join("") || '<p class="muted">No quotes yet.</p>';
   const hasApprovedQuote = (w.quotes || []).some((q) => q.status === "approved");
   const invoices = (w.invoices || []).map(invoiceBlock).join("") || '<p class="muted">No invoices yet.</p>';
   const attachments = attachmentGrid(w.attachments || []);
@@ -234,7 +235,12 @@ async function renderWorkOrder(id) {
         <div class="card"><div class="card-head"><h3>Customer</h3></div>
           <div class="card-body"><strong>${esc(w.customer?.name || "")}</strong>
             <div class="muted">${esc(w.customer?.account_number || "")}</div>
-            <div class="muted">${esc(w.customer?.phone || "")}</div></div></div>
+            <div class="muted">${esc(w.customer?.phone || "")}</div>
+            <div class="divider"></div>
+            <dl class="kv"><dt>PO number</dt><dd>${w.po_number ? `<span class="mono">${esc(w.po_number)}</span>` : '<span class="muted">—</span>'}
+              <button class="btn btn-ghost btn-sm" id="editPo" style="margin-left:6px;padding:.15rem .5rem">${w.po_number ? "Edit" : "Add"}</button></dd>
+              <dt>Approval limit</dt><dd>${w.customer?.approval_limit != null ? money(w.customer.approval_limit) : '<span class="muted">none</span>'}</dd></dl>
+          </div></div>
         <div class="card"><div class="card-head"><h3>Timeline</h3></div>
           <div class="card-body"><ul class="timeline">${timeline}</ul></div></div>
       </div>
@@ -246,6 +252,12 @@ async function renderWorkOrder(id) {
   el("#logTime").addEventListener("click", () => openLogTime(w.id));
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
   el("#usePart").addEventListener("click", () => openUsePart(w.id));
+  el("#editPo").addEventListener("click", async () => {
+    const po = prompt("Customer PO number for this job:", w.po_number || "");
+    if (po === null) return;
+    try { await api.updateWorkOrder(w.id, { po_number: po.trim() || null }); toast("PO updated", "ok"); renderWorkOrder(w.id); }
+    catch (e) { toast(e.message, "err"); }
+  });
   loadPartsUsed(w);
   const sb = el("#schedBtn");
   if (sb) sb.addEventListener("click", async () =>
@@ -408,16 +420,18 @@ function openInvoice(woId) {
   };
 }
 
-function quoteBlock(q) {
+function quoteBlock(q, approvalLimit) {
   const lines = q.lines.map((l) => `<div class="spread" style="font-size:.86rem;padding:3px 0">
     <span>${esc(l.description)} <span class="muted">×${l.quantity}</span></span><span class="mono">${money(l.line_total)}</span></div>`).join("");
-  return `<div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body">
+  const overLimit = approvalLimit != null && q.total > approvalLimit && q.status !== "rejected";
+  return `<div class="card" style="box-shadow:none;border-color:${overLimit ? "var(--accent-500)" : "var(--line)"}"><div class="card-body">
     <div class="spread"><strong class="mono">${esc(q.number)}</strong>
       <span class="badge status ${q.status === "approved" ? "ready" : q.status === "rejected" ? "cancelled" : "quote_pending"}">${esc(q.status)}</span></div>
     <div class="divider"></div>${lines}<div class="divider"></div>
     <div class="spread"><span class="muted">Subtotal</span><span class="mono">${money(q.subtotal)}</span></div>
     <div class="spread"><span class="muted">Tax</span><span class="mono">${money(q.tax)}</span></div>
-    <div class="spread"><strong>Total</strong><strong class="mono">${money(q.total)}</strong></div></div></div>`;
+    <div class="spread"><strong>Total</strong><strong class="mono">${money(q.total)}</strong></div>
+    ${overLimit ? `<div class="badge status on_hold" style="margin-top:8px">⚠ Exceeds customer approval limit (${money(approvalLimit)}) — PO required</div>` : ""}</div></div>`;
 }
 
 const sevColor = (s) => ({ info: "#64748b", minor: "#0891b2", major: "#d97706", critical: "#dc2626" }[s] || "#64748b");

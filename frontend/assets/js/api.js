@@ -49,6 +49,7 @@ export const api = {
   },
   workOrder: (id) => request(`/api/work-orders/${id}`),
   createWorkOrder: (b) => request("/api/work-orders", { method: "POST", body: b }),
+  updateWorkOrder: (id, b) => request(`/api/work-orders/${id}`, { method: "PATCH", body: b }),
   changeStatus: (id, b) => request(`/api/work-orders/${id}/status`, { method: "POST", body: b }),
   scheduleVisit: (id, b) => request(`/api/work-orders/${id}/schedule`, { method: "POST", body: b }),
   users: (role) => request(`/api/users${role ? `?role=${role}` : ""}`),
@@ -83,8 +84,8 @@ export const api = {
   portalInvoices: () => request("/api/portal/invoices"),
   portalWorkOrder: (id) => request(`/api/portal/work-orders/${id}`),
   portalEquipment: () => request("/api/portal/equipment"),
-  decideQuote: (quoteId, approve, note) =>
-    request(`/api/portal/quotes/${quoteId}/decision`, { method: "POST", body: { approve, note } }),
+  decideQuote: (quoteId, approve, note, poNumber) =>
+    request(`/api/portal/quotes/${quoteId}/decision`, { method: "POST", body: { approve, note, po_number: poNumber || null } }),
 };
 
 /** Fetch an authenticated binary endpoint and open it in a new tab (blob URL). */

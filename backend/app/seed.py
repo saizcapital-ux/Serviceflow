@@ -75,10 +75,12 @@ def seed() -> None:
         acme = Customer(organization_id=org.id, name="Acme Power & Water", account_number="ACME-001",
                         email="maintenance@acmepower.com", phone="(555) 210-4433",
                         billing_address="1400 Turbine Rd, Houston, TX",
-                        shipping_address="1400 Turbine Rd, Dock 3, Houston, TX")
+                        shipping_address="1400 Turbine Rd, Dock 3, Houston, TX",
+                        approval_limit=2000.0)
         gulf = Customer(organization_id=org.id, name="Gulf Coast Chemicals", account_number="GULF-014",
                         email="reliability@gulfcoastchem.com", phone="(555) 771-9080",
-                        billing_address="88 Refinery Way, Beaumont, TX")
+                        billing_address="88 Refinery Way, Beaumont, TX",
+                        approval_limit=10000.0)
         db.add_all([acme, gulf])
         db.flush()
 

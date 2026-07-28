@@ -61,6 +61,7 @@ class CustomerBase(BaseModel):
     phone: str | None = None
     billing_address: str | None = None
     shipping_address: str | None = None
+    approval_limit: float | None = None
 
 
 class CustomerCreate(CustomerBase):
@@ -103,6 +104,7 @@ class WorkOrderCreate(BaseModel):
     priority: Priority = Priority.normal
     title: str
     problem_description: str | None = None
+    po_number: str | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     promised_date: date | None = None
@@ -112,6 +114,7 @@ class WorkOrderUpdate(BaseModel):
     priority: Priority | None = None
     title: str | None = None
     problem_description: str | None = None
+    po_number: str | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     promised_date: date | None = None
@@ -177,6 +180,7 @@ class QuoteOut(ORMModel):
 class QuoteDecision(BaseModel):
     approve: bool
     note: str | None = None
+    po_number: str | None = None
 
 
 class InvoiceLineOut(ORMModel):
@@ -362,6 +366,7 @@ class WorkOrderSummary(ORMModel):
 
 class WorkOrderDetail(WorkOrderSummary):
     problem_description: str | None = None
+    po_number: str | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     total_actual: float

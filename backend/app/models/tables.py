@@ -91,6 +91,8 @@ class Customer(Base):
     phone: Mapped[str | None] = mapped_column(String(40))
     billing_address: Mapped[str | None] = mapped_column(Text)
     shipping_address: Mapped[str | None] = mapped_column(Text)
+    # Quotes above this amount require a PO / explicit sign-off (null = no limit).
+    approval_limit: Mapped[float | None] = mapped_column(Float)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -148,6 +150,7 @@ class WorkOrder(Base):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     problem_description: Mapped[str | None] = mapped_column(Text)
+    po_number: Mapped[str | None] = mapped_column(String(60))
     assigned_to: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     promised_date: Mapped[date | None] = mapped_column(Date)

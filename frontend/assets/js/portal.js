@@ -78,6 +78,8 @@ async function renderDetail(id) {
   const w = await api.portalWorkOrder(id);
   const eq = w.equipment;
   const pendingQuote = w.quotes.find((q) => q.status === "sent" || q.status === "draft");
+  const limit = w.customer?.approval_limit;
+  const overLimit = pendingQuote && limit != null && pendingQuote.total > limit;
   const timeline = w.events.map((e) => `
     <li class="${e.event_type}">
       <div class="tl-msg">${esc(e.message || (e.to_status ? `Status updated to ${STATUS_LABEL[e.to_status]}` : ""))}</div>
@@ -90,7 +92,7 @@ async function renderDetail(id) {
         <div class="row"><span class="mono">${esc(w.number)}</span>${statusBadge(w.status)}</div></div>
     </div>
     <div class="card card-pad" style="margin-bottom:18px">${bigTracker(w.status)}</div>
-    ${pendingQuote ? quoteApprovalCard(pendingQuote, w) : ""}
+    ${pendingQuote ? quoteApprovalCard(pendingQuote, w, overLimit, limit) : ""}
     <div class="grid" style="grid-template-columns:1.4fr 1fr">
       <div class="card"><div class="card-head"><h3>Status history</h3></div>
         <div class="card-body"><ul class="timeline">${timeline}</ul></div></div>
@@ -118,8 +120,8 @@ async function renderDetail(id) {
     </div>`;
 
   const ap = el("#approveBtn"), rj = el("#rejectBtn");
-  if (ap) ap.addEventListener("click", () => decide(pendingQuote.id, true, id));
-  if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id));
+  if (ap) ap.addEventListener("click", () => decide(pendingQuote.id, true, id, overLimit));
+  if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id, false));
   els("[data-inv]").forEach((b) =>
     b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
   els("[data-att]").forEach((b) =>
@@ -142,7 +144,7 @@ function bigTracker(status) {
     </div>`).join("")}</div>`;
 }
 
-function quoteApprovalCard(q, w) {
+function quoteApprovalCard(q, w, overLimit, limit) {
   const lines = q.lines.map((l) => `<div class="spread" style="padding:4px 0;font-size:.9rem">
     <span>${esc(l.description)} <span class="muted">×${l.quantity}</span></span><span class="mono">${money(l.line_total)}</span></div>`).join("");
   return `<div class="card" style="border:2px solid var(--accent-500);margin-bottom:18px">
@@ -153,22 +155,27 @@ function quoteApprovalCard(q, w) {
       <div class="spread"><span class="muted">Tax</span><span class="mono">${money(q.tax)}</span></div>
       <div class="spread" style="font-size:1.1rem"><strong>Total</strong><strong class="mono">${money(q.total)}</strong></div>
       ${q.valid_until ? `<p class="muted" style="font-size:.82rem;margin-top:8px">Valid until ${fmtDate(q.valid_until)}</p>` : ""}
+      ${overLimit ? `<div class="badge status on_hold" style="margin-top:10px">⚠ This exceeds your standing approval limit of ${money(limit)} — a PO number is required to approve.</div>` : ""}
       <div class="row" style="justify-content:flex-end;margin-top:14px">
         <button class="btn btn-danger" id="rejectBtn">Decline</button>
         <button class="btn btn-success" id="approveBtn">✓ Approve &amp; authorize repair</button></div></div></div>`;
 }
 
-async function decide(quoteId, approve, woId) {
+async function decide(quoteId, approve, woId, requirePo) {
   const m = modal(`<div class="card-head"><h3>${approve ? "Approve quote" : "Decline quote"}</h3></div>
     <div class="card-body stack">
       <p class="muted">${approve ? "This authorizes the service center to begin the repair." : "Let the service center know why you're declining (optional)."}</p>
+      ${approve && requirePo ? `<label class="field"><span>PO number <span style="color:var(--danger)">*</span> (required — exceeds your approval limit)</span>
+        <input id="dpo" placeholder="e.g. 4500012345" /></label>` : ""}
       <label class="field"><span>Note (optional)</span><textarea id="dn"></textarea></label>
       <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="dc">Cancel</button>
         <button class="btn ${approve ? "btn-success" : "btn-danger"}" id="dok">${approve ? "Approve" : "Decline"}</button></div></div>`);
   el("#dc", m.root).onclick = m.close;
   el("#dok", m.root).onclick = async () => {
+    const po = el("#dpo", m.root)?.value.trim();
+    if (approve && requirePo && !po) return toast("A PO number is required to approve this quote.", "err");
     try {
-      await api.decideQuote(quoteId, approve, el("#dn", m.root).value.trim() || null);
+      await api.decideQuote(quoteId, approve, el("#dn", m.root).value.trim() || null, po || null);
       m.close(); toast(approve ? "Quote approved — thank you!" : "Quote declined.", approve ? "ok" : "");
       renderDetail(woId);
     } catch (ex) { toast(ex.message, "err"); }
