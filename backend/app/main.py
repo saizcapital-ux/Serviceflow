@@ -17,8 +17,11 @@ from app.api.routers import (
 from app.core.config import settings
 from app.core.database import Base, engine
 
-# Create tables on startup for zero-config dev. Production uses Alembic migrations.
-Base.metadata.create_all(bind=engine)
+# Zero-config dev: auto-create tables on startup. In production set
+# SERVICEFLOW_ENVIRONMENT=production and manage schema with Alembic
+# (`alembic upgrade head`) instead.
+if settings.environment != "production":
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Serviceflow API",

@@ -9,6 +9,7 @@ PyJWT==2.10.1
 python-multipart==0.0.20
 email-validator==2.2.0
 reportlab==4.2.5
+alembic==1.14.0
 # Optional integrations (lazy-imported; only needed when enabled):
 #   stripe>=11  — real Stripe subscription checkout (mock mode works without it)
 #   boto3>=1.35 — S3 storage backend (local storage works without it)

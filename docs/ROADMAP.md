@@ -13,18 +13,22 @@ A pragmatic path from the current MVP to a sellable, scalable SaaS.
 - Staff dashboard (KPIs + pipeline)
 - REST API with OpenAPI docs; HTML/CSS/JS staff app + portal; seed/demo data
 
-## 🔜 v1 — "Run a real shop" (next)
+## ✅ v1 — "Run a real shop" (delivered)
 
-| Area | Work |
-|------|------|
-| **Billing (theirs)** | Invoices from approved quotes; PDF export; QuickBooks/Xero sync |
-| **Billing (yours)**  | Stripe subscriptions, plans & seats, trial→paid |
-| **Labor & costing**  | Technician time entries in UI; labor vs. estimate margin reporting |
-| **Files/photos**     | S3 uploads for nameplate pics, inspection photos, test reports |
-| **Notifications**    | Email/SMS on status change & quote sent (task queue) |
-| **Scheduling**       | Field dispatch calendar, technician assignment board |
-| **Migrations**       | Alembic; seed → fixtures separation |
-| **Testing/CI**       | pytest suite for the service layer + API; GitHub Actions |
+| Area | Status |
+|------|--------|
+| **Billing (theirs)** | ✅ Invoices from approved quotes + branded PDF export (QuickBooks/Xero sync still open) |
+| **Billing (yours)**  | ✅ Stripe subscriptions, plans & seats, mock mode; card capture UI open |
+| **Labor & costing**  | ✅ Time entries in UI; labor vs. estimate margin on each job |
+| **Files/photos**     | ✅ Uploads with pluggable local/S3 storage backend |
+| **Notifications**    | ✅ Email on status change & quote sent (SMTP/console); SMS stub; async queue open |
+| **Scheduling**       | ✅ Field dispatch board + technician assignment |
+| **Migrations**       | ✅ Alembic wired; initial migration; CI verifies up/down |
+| **Testing/CI**       | ✅ pytest suite (28 tests) + GitHub Actions (tests, migrations, JS syntax) |
+
+### v1 follow-ups still open
+- Accounting sync (QuickBooks/Xero), Stripe card-capture UI & customer portal for billing
+- Async task queue for notifications (Celery/RQ) + SMS provider (Twilio)
 
 ## 🌤 v2 — "Grow"
 

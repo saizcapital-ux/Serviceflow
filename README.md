@@ -22,12 +22,19 @@ record:
   Test → Ship, with a full status timeline on every job.
 - **Asset-centric history** — Every motor, valve, pump and actuator has a
   permanent nameplate + repair history, so the 5th visit is faster than the 1st.
-- **Field service** — Schedule and dispatch technicians for on-site work with the
-  same job engine used in the shop.
+- **Quotes & invoicing** — Build quotes with line items; customers approve online;
+  invoice the approved job and export a branded **PDF**.
+- **Job costing** — Log technician labor and see estimate-vs-actual **margin**.
+- **Field dispatch** — Schedule and assign technicians on a dispatch board, with
+  the same job engine used in the shop.
+- **Attachments & photos** — Nameplate pics, inspection photos and test reports
+  on every job (pluggable local/S3 storage).
+- **Notifications** — Customers are emailed on status changes and new quotes
+  (SMTP in prod, console in dev; SMS-ready).
 - **Customer portal** — Your customers log in to see live job status, approve
-  quotes, and pull the complete service history of their equipment.
-- **Multi-tenant** — Every service center is an isolated tenant; Serviceflow is
-  sold as a subscription.
+  quotes, download invoices, and pull the complete service history.
+- **Multi-tenant SaaS** — Isolated tenants with **Stripe subscription billing**
+  (Starter/Pro/Enterprise; mock mode for demos).
 
 ---
 
@@ -54,6 +61,9 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python -m app.seed            # creates SQLite db + demo data
 uvicorn app.main:app --reload # API on http://localhost:8000  (docs at /docs)
+
+# Production schema is managed with Alembic instead of auto-create:
+#   SERVICEFLOW_ENVIRONMENT=production alembic upgrade head
 
 # 2. Frontend (any static server)
 cd ../frontend
