@@ -262,6 +262,18 @@ class CostingSummary(BaseModel):
     margin_pct: float | None  # margin / estimate
 
 
+class UserSummary(ORMModel):
+    id: int
+    full_name: str
+    role: UserRole
+
+
+class ScheduleRequest(BaseModel):
+    scheduled_at: datetime
+    assigned_to: int | None = None
+    notify_customer: bool = True
+
+
 class WorkOrderSummary(ORMModel):
     id: int
     number: str
@@ -271,6 +283,8 @@ class WorkOrderSummary(ORMModel):
     service_type: ServiceType
     customer_id: int
     equipment_id: int | None = None
+    assigned_to: int | None = None
+    scheduled_at: datetime | None = None
     promised_date: date | None = None
     total_estimate: float
     created_at: datetime

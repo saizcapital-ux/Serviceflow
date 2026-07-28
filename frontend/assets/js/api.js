@@ -49,6 +49,8 @@ export const api = {
   workOrder: (id) => request(`/api/work-orders/${id}`),
   createWorkOrder: (b) => request("/api/work-orders", { method: "POST", body: b }),
   changeStatus: (id, b) => request(`/api/work-orders/${id}/status`, { method: "POST", body: b }),
+  scheduleVisit: (id, b) => request(`/api/work-orders/${id}/schedule`, { method: "POST", body: b }),
+  users: (role) => request(`/api/users${role ? `?role=${role}` : ""}`),
   addFinding: (id, b) => request(`/api/work-orders/${id}/findings`, { method: "POST", body: b }),
   createQuote: (id, b) => request(`/api/work-orders/${id}/quotes`, { method: "POST", body: b }),
   // labor & costing

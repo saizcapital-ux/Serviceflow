@@ -225,7 +225,7 @@ def seed() -> None:
                       "Elevated vibration reported at Unit 5. Dispatch tech for field diagnosis and laser alignment.",
                       [WorkOrderStatus.intake],
                       ServiceType.field_service, Priority.rush, assigned=tech, promised_offset=2)
-        wo3.scheduled_at = None
+        wo3.scheduled_at = datetime.now(timezone.utc).replace(hour=14, minute=0, second=0, microsecond=0) + timedelta(days=2)
         db.add(WorkOrderEvent(work_order_id=wo3.id, event_type=EventType.field_visit,
                               message="Field visit scheduled for Unit 5.", visible_to_customer=True))
 

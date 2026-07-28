@@ -10,6 +10,7 @@ from app.api.routers import (
     invoices,
     notifications,
     portal,
+    team,
     work_orders,
 )
 from app.core.config import settings
@@ -35,6 +36,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
+app.include_router(team.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
 app.include_router(invoices.router)

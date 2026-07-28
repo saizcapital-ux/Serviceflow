@@ -107,6 +107,26 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_schedule_field_visit(client, staff_headers):
+    techs = client.get("/api/users?role=technician", headers=staff_headers).json()
+    assert techs, "seed should include a technician"
+    wos = client.get("/api/work-orders?service_type=field_service", headers=staff_headers).json()
+    wo = wos[0]
+    r = client.post(f"/api/work-orders/{wo['id']}/schedule", headers=staff_headers,
+                    json={"scheduled_at": "2026-08-01T14:00:00Z", "assigned_to": techs[0]["id"]})
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["assigned_to"] == techs[0]["id"]
+    assert detail["scheduled_at"] is not None
+    # A field_visit event lands on the timeline
+    assert any(e["event_type"] == "field_visit" for e in detail["events"])
+
+
+def test_users_endpoint_excludes_customers(client, staff_headers):
+    users = client.get("/api/users", headers=staff_headers).json()
+    assert users and all(u["role"] != "customer" for u in users)
+
+
 def test_status_change_creates_notification(client, staff_headers):
     # Create a fresh job, move intake -> inspection (customer-visible), expect a notification.
     cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]

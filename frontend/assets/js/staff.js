@@ -40,7 +40,7 @@ async function router() {
     if (route === "dashboard") return renderDashboard();
     if (route === "workorders" && id) return renderWorkOrder(id);
     if (route === "workorders") return renderWorkOrders();
-    if (route === "field") return renderWorkOrders({ service_type: "field_service" }, "Field Service");
+    if (route === "field") return renderDispatch();
     if (route === "customers") return renderCustomers();
     if (route === "equipment") return renderEquipment();
     if (route === "invoices") return renderInvoices();
@@ -187,6 +187,7 @@ async function renderWorkOrder(id) {
         <div class="row"><span class="mono">${esc(w.number)}</span> ${statusBadge(w.status)} ${prioBadge(w.priority)}
         <span class="badge">${w.service_type === "field_service" ? "📍 Field Service" : "🏭 Shop Repair"}</span></div></div>
       <div class="row">
+        ${w.service_type === "field_service" ? '<button class="btn btn-ghost btn-sm" id="schedBtn">📅 Schedule</button>' : ""}
         <button class="btn btn-ghost btn-sm" id="addFinding">+ Finding</button>
         <button class="btn btn-ghost btn-sm" id="addQuote">+ Quote</button>
         <button class="btn btn-primary btn-sm" id="advance">Advance status ▾</button>
@@ -237,6 +238,9 @@ async function renderWorkOrder(id) {
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
   el("#logTime").addEventListener("click", () => openLogTime(w.id));
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
+  const sb = el("#schedBtn");
+  if (sb) sb.addEventListener("click", async () =>
+    openSchedule(w.id, techCache || (techCache = await api.users("technician")), () => renderWorkOrder(w.id)));
   wireAttachments();
   loadCosting(w.id);
   const inv = el("#newInvoice");
@@ -589,6 +593,99 @@ async function renderInvoices() {
       try { await api.markInvoicePaid(b.dataset.invPaid, true); toast("Marked paid", "ok"); renderInvoices(); }
       catch (e) { toast(e.message, "err"); }
     }));
+}
+
+/* ---------- field dispatch board ---------- */
+let techCache = null;
+
+async function renderDispatch() {
+  loading();
+  const [list, cust, techs] = await Promise.all([
+    api.workOrders({ service_type: "field_service" }),
+    customersCache || api.customers(),
+    techCache || api.users("technician"),
+  ]);
+  customersCache = cust; techCache = techs;
+  const custById = Object.fromEntries(cust.map((c) => [c.id, c.name]));
+  const techById = Object.fromEntries(techs.map((t) => [t.id, t.full_name]));
+  const active = list.filter((w) => !["closed", "cancelled", "shipped"].includes(w.status));
+
+  // Group by scheduled day (YYYY-MM-DD) or "unscheduled".
+  const groups = {};
+  const unscheduled = [];
+  active.forEach((w) => {
+    if (w.scheduled_at) {
+      const day = new Date(w.scheduled_at).toISOString().slice(0, 10);
+      (groups[day] ||= []).push(w);
+    } else unscheduled.push(w);
+  });
+  const days = Object.keys(groups).sort();
+
+  const card = (w) => `
+    <div class="card" data-wo="${w.id}" style="cursor:pointer;padding:12px;margin-bottom:10px;border-left:4px solid var(--st-testing)">
+      <div class="spread"><span class="mono muted">${esc(w.number)}</span>${prioBadge(w.priority)}</div>
+      <div style="font-weight:600;margin:4px 0">${esc(w.title)}</div>
+      <div class="muted" style="font-size:.84rem">🏢 ${esc(custById[w.customer_id] || "")}</div>
+      <div class="spread" style="margin-top:8px">
+        <span class="badge">${w.scheduled_at ? "🕑 " + fmtDateTime(w.scheduled_at).split(", ").slice(1).join(", ") : "unscheduled"}</span>
+        <span class="muted" style="font-size:.82rem">${w.assigned_to ? "👷 " + esc(techById[w.assigned_to] || "Tech") : "unassigned"}</span>
+      </div>
+      <button class="btn btn-ghost btn-sm" data-sched="${w.id}" style="margin-top:8px;width:100%">📅 ${w.scheduled_at ? "Reschedule" : "Schedule visit"}</button>
+    </div>`;
+
+  const dayLabel = (d) => new Date(d + "T00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+
+  view.innerHTML = `
+    <div class="page-title"><h1>Field dispatch</h1>
+      <span class="muted">${active.length} active field job${active.length === 1 ? "" : "s"}</span></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(260px,1fr));align-items:start">
+      <div class="card card-pad" style="background:var(--surface-2)">
+        <h3 style="margin-bottom:12px">📥 Unscheduled <span class="badge">${unscheduled.length}</span></h3>
+        ${unscheduled.map(card).join("") || '<p class="muted">Nothing waiting.</p>'}
+      </div>
+      ${days.map((d) => `<div class="card card-pad">
+        <h3 style="margin-bottom:12px">${dayLabel(d)} <span class="badge">${groups[d].length}</span></h3>
+        ${groups[d].sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at)).map(card).join("")}
+      </div>`).join("")}
+    </div>`;
+
+  els("[data-wo]").forEach((c) => c.addEventListener("click", (e) => {
+    if (e.target.closest("[data-sched]")) return;
+    location.hash = `#/workorders/${c.dataset.wo}`;
+  }));
+  els("[data-sched]").forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSchedule(b.dataset.sched, techs);
+  }));
+}
+
+function openSchedule(woId, techs, after) {
+  const refresh = after || (() => renderDispatch());
+  const now = new Date();
+  now.setMinutes(0, 0, 0); now.setHours(now.getHours() + 1);
+  const localVal = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const m = modal(`<div class="card-head"><h3>Schedule field visit</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Date &amp; time</span><input type="datetime-local" id="sdt" value="${localVal}" /></label>
+      <label class="field"><span>Technician</span><select id="stech">
+        <option value="">— unassigned —</option>
+        ${techs.map((t) => `<option value="${t.id}">${esc(t.full_name)}</option>`).join("")}</select></label>
+      <label class="row" style="font-size:.88rem"><input type="checkbox" id="snotify" checked style="width:auto"> Notify customer by email</label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="scx">Cancel</button>
+        <button class="btn btn-primary" id="sok">Schedule</button></div></div>`);
+  el("#scx", m.root).onclick = m.close;
+  el("#sok", m.root).onclick = async () => {
+    const dt = el("#sdt", m.root).value;
+    if (!dt) return toast("Pick a date & time", "err");
+    try {
+      await api.scheduleVisit(woId, {
+        scheduled_at: new Date(dt).toISOString(),
+        assigned_to: +el("#stech", m.root).value || null,
+        notify_customer: el("#snotify", m.root).checked,
+      });
+      m.close(); toast("Visit scheduled", "ok"); refresh();
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 /* ---------- notifications ---------- */

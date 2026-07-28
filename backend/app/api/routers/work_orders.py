@@ -28,6 +28,7 @@ from app.schemas import (
     FindingOut,
     QuoteCreate,
     QuoteOut,
+    ScheduleRequest,
     StatusChangeRequest,
     TimeEntryCreate,
     TimeEntryOut,
@@ -146,6 +147,29 @@ def change_status(
         notifications.notify_customer_status(
             db, wo, payload.message or f"Status updated to {payload.status.value.replace('_', ' ')}."
         )
+    db.commit()
+    return _load_detail(db, wo_id, user.organization_id)
+
+
+@router.post("/{wo_id}/schedule", response_model=WorkOrderDetail)
+def schedule_visit(wo_id: int, payload: ScheduleRequest, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Schedule (or reschedule) a field visit and optionally assign a technician."""
+    wo = _load_detail(db, wo_id, user.organization_id)
+    wo.scheduled_at = payload.scheduled_at
+    if payload.assigned_to is not None:
+        tech = db.get(User, payload.assigned_to)
+        if not tech or tech.organization_id != user.organization_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Assigned user not found.")
+        wo.assigned_to = payload.assigned_to
+    when = payload.scheduled_at.strftime("%b %d, %Y %I:%M %p")
+    db.add(
+        WorkOrderEvent(
+            work_order_id=wo.id, event_type=EventType.field_visit, created_by=user.id,
+            message=f"Field visit scheduled for {when}.", visible_to_customer=True,
+        )
+    )
+    if payload.notify_customer:
+        notifications.notify_customer_status(db, wo, f"Field visit scheduled for {when}.")
     db.commit()
     return _load_detail(db, wo_id, user.organization_id)
 
