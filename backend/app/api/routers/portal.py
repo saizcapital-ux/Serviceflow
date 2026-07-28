@@ -55,6 +55,7 @@ def my_work_order_detail(wo_id: int, db: Session = Depends(get_db), user: User =
             selectinload(WorkOrder.findings),
             selectinload(WorkOrder.quotes).selectinload(Quote.lines),
             selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
+            selectinload(WorkOrder.attachments),
         )
     )
     if not wo:

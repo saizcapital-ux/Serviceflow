@@ -1,5 +1,5 @@
 /* Customer portal — read-mostly SPA: status, history, and quote approval. */
-import { api, auth, openPdf } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
@@ -111,6 +111,9 @@ async function renderDetail(id) {
             <span class="mono">${esc(i.number)}</span>
             <span>${money(i.total)} <span class="badge status ${i.status === "paid" ? "ready" : "quote_pending"}">${esc(i.status)}</span>
             <button class="btn btn-ghost btn-sm" data-inv="${i.id}">⬇ PDF</button></span></div>`).join("")}</div></div>` : ""}
+        ${(w.attachments || []).length ? `<div class="card"><div class="card-head"><h3>Photos &amp; reports</h3></div>
+          <div class="card-body stack">${w.attachments.map((a) => `<button class="btn btn-ghost btn-sm" data-att="${a.id}" style="justify-content:flex-start">
+            ${({photo:"📷",nameplate:"🔖",report:"📊",document:"📄"})[a.kind] || "📎"} ${esc(a.filename)}</button>`).join("")}</div></div>` : ""}
       </div>
     </div>`;
 
@@ -119,6 +122,8 @@ async function renderDetail(id) {
   if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id));
   els("[data-inv]").forEach((b) =>
     b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
+  els("[data-att]").forEach((b) =>
+    b.addEventListener("click", () => openAttachment(b.dataset.att).catch((e) => toast(e.message, "err"))));
 }
 
 function bigTracker(status) {

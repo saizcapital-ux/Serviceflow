@@ -11,6 +11,7 @@ from sqlalchemy import select
 from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 from app.models import (
+    Attachment,
     Contact,
     Customer,
     Equipment,
@@ -164,6 +165,23 @@ def seed() -> None:
             TimeEntry(work_order_id=wo1.id, user_id=tech.id, hours=8.0,
                       note="Rewind stator, connect & lace", worked_on=today - timedelta(days=1)),
         ])
+        # Demo attachment: a nameplate image stored via the storage backend.
+        from app.services.storage import make_key, storage  # local import to avoid import cycles at module load
+        nameplate_svg = (
+            "<svg xmlns='http://www.w3.org/2000/svg' width='420' height='260'>"
+            "<rect width='420' height='260' fill='#12314f'/>"
+            "<rect x='12' y='12' width='396' height='236' fill='none' stroke='#5aa0e6' stroke-width='2'/>"
+            "<text x='210' y='46' fill='#fff' font-family='Arial' font-size='20' font-weight='bold' "
+            "text-anchor='middle'>SIEMENS 1LE2</text>"
+            "<text x='30' y='96' fill='#cfe0f2' font-family='monospace' font-size='16'>HP: 250   RPM: 1785</text>"
+            "<text x='30' y='128' fill='#cfe0f2' font-family='monospace' font-size='16'>VOLTS: 460   FRAME: 449T</text>"
+            "<text x='30' y='160' fill='#cfe0f2' font-family='monospace' font-size='16'>S/N: SN-MTR-88213</text>"
+            "<text x='30' y='210' fill='#f59e0b' font-family='Arial' font-size='14'>Nameplate photo (demo)</text></svg>"
+        )
+        key = make_key(org.id, wo1.id, "nameplate.svg")
+        storage.save(key, nameplate_svg.encode())
+        db.add(Attachment(work_order_id=wo1.id, filename="nameplate.svg", content_type="image/svg+xml",
+                          url=key, kind="nameplate", uploaded_by=tech.id))
 
         # 2) Limitorque actuator — awaiting customer approval
         wo2 = make_wo("WO-2026-0002", acme, limitorque,

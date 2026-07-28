@@ -1,5 +1,5 @@
 /* Staff application — hash-routed SPA for service-center employees. */
-import { api, auth, openPdf } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment, uploadAttachment } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
@@ -172,6 +172,7 @@ async function renderWorkOrder(id) {
   const quotes = w.quotes.map(quoteBlock).join("") || '<p class="muted">No quotes yet.</p>';
   const hasApprovedQuote = (w.quotes || []).some((q) => q.status === "approved");
   const invoices = (w.invoices || []).map(invoiceBlock).join("") || '<p class="muted">No invoices yet.</p>';
+  const attachments = attachmentGrid(w.attachments || []);
   const timeEntries = (w.time_entries || []).map((t) => `
     <div class="spread" style="padding:6px 0;border-bottom:1px solid var(--line)">
       <div><strong>${t.hours}h</strong> <span class="muted">${esc(t.note || "")}</span></div>
@@ -196,6 +197,9 @@ async function renderWorkOrder(id) {
           <div class="card-body"><p>${esc(w.problem_description || "—")}</p></div></div>
         <div class="card"><div class="card-head"><h3>Inspection findings</h3></div>
           <div class="card-body">${findings}</div></div>
+        <div class="card"><div class="card-head"><h3>Attachments &amp; photos</h3>
+          <button class="btn btn-ghost btn-sm" id="uploadBtn">+ Upload</button></div>
+          <div class="card-body">${attachments}</div></div>
         <div class="card"><div class="card-head"><h3>Quotes</h3></div>
           <div class="card-body stack">${quotes}</div></div>
         <div class="card"><div class="card-head"><h3>Labor &amp; costing</h3>
@@ -231,6 +235,8 @@ async function renderWorkOrder(id) {
   el("#addFinding").addEventListener("click", () => openFinding(w.id));
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
   el("#logTime").addEventListener("click", () => openLogTime(w.id));
+  el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
+  wireAttachments();
   loadCosting(w.id);
   const inv = el("#newInvoice");
   if (inv) inv.addEventListener("click", () => openInvoice(w.id));
@@ -241,6 +247,42 @@ async function renderWorkOrder(id) {
       try { await api.markInvoicePaid(b.dataset.invPaid, true); toast("Invoice marked paid", "ok"); renderWorkOrder(w.id); }
       catch (e) { toast(e.message, "err"); }
     }));
+}
+
+const ATT_ICON = { photo: "📷", nameplate: "🔖", report: "📊", document: "📄" };
+
+function attachmentGrid(atts) {
+  if (!atts.length) return '<p class="muted">No attachments yet. Add nameplate photos, inspection pictures, or test reports.</p>';
+  return `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+    ${atts.map((a) => `<button class="card" data-att="${a.id}" style="cursor:pointer;text-align:left;border:1px solid var(--line);padding:12px;background:var(--surface-2)">
+      <div style="font-size:1.6rem">${ATT_ICON[a.kind] || "📎"}</div>
+      <div style="font-size:.82rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.filename)}</div>
+      <span class="badge" style="margin-top:4px">${esc(a.kind)}</span></button>`).join("")}</div>`;
+}
+
+function wireAttachments() {
+  els("[data-att]").forEach((b) =>
+    b.addEventListener("click", () => openAttachment(b.dataset.att).catch((e) => toast(e.message, "err"))));
+}
+
+function openUpload(woId) {
+  const m = modal(`<div class="card-head"><h3>Upload attachment</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>File (max 15 MB)</span><input type="file" id="uf" /></label>
+      <label class="field"><span>Type</span><select id="uk">
+        <option value="photo">Photo</option><option value="nameplate">Nameplate</option>
+        <option value="report">Test report</option><option value="document">Document</option></select></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="uc">Cancel</button>
+        <button class="btn btn-primary" id="uok">Upload</button></div></div>`);
+  el("#uc", m.root).onclick = m.close;
+  el("#uok", m.root).onclick = async () => {
+    const f = el("#uf", m.root).files[0];
+    if (!f) return toast("Choose a file", "err");
+    try {
+      await uploadAttachment(woId, f, el("#uk", m.root).value);
+      m.close(); toast("Uploaded", "ok"); renderWorkOrder(woId);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 async function loadCosting(woId) {

@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     # CORS — comma-separated origins, or "*" for dev.
     cors_origins: str = "*"
 
+    # File storage — "local" (default) or "s3". Local files live under storage_dir.
+    storage_backend: str = "local"
+    storage_dir: str = "./uploads"
+    s3_bucket: str = ""
+    s3_region: str = "us-east-1"
+
     @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins.strip() == "*":

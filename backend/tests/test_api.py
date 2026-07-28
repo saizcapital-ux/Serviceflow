@@ -107,6 +107,32 @@ def test_invoice_requires_approved_quote(client, staff_headers):
     assert r.status_code == 409
 
 
+def test_upload_and_fetch_attachment(client, staff_headers, portal_headers):
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = next(w for w in wos if w["number"] == "WO-2026-0001")  # Acme's job
+    files = {"file": ("test.txt", b"hello nameplate", "text/plain")}
+    up = client.post(f"/api/work-orders/{wo['id']}/attachments", headers=staff_headers,
+                     files=files, data={"kind": "document"})
+    assert up.status_code == 201, up.text
+    att = up.json()
+    assert att["filename"] == "test.txt" and att["kind"] == "document"
+
+    # Fetch the file back (staff)
+    got = client.get(f"/api/attachments/{att['id']}/file", headers=staff_headers)
+    assert got.status_code == 200 and got.content == b"hello nameplate"
+
+    # Portal (Acme) can fetch its own work order's attachment
+    assert client.get(f"/api/attachments/{att['id']}/file", headers=portal_headers).status_code == 200
+
+
+def test_attachment_rejects_bad_kind(client, staff_headers):
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = wos[0]
+    r = client.post(f"/api/work-orders/{wo['id']}/attachments", headers=staff_headers,
+                    files={"file": ("x.txt", b"x", "text/plain")}, data={"kind": "malware"})
+    assert r.status_code == 422
+
+
 def test_log_time_and_costing(client, staff_headers):
     wos = client.get("/api/work-orders", headers=staff_headers).json()
     wo = next(w for w in wos if w["number"] == "WO-2026-0001")  # seeded with 14.5h + approved quote

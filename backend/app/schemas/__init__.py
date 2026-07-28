@@ -213,6 +213,15 @@ class MarkPaid(BaseModel):
     paid: bool = True
 
 
+class AttachmentOut(ORMModel):
+    id: int
+    work_order_id: int
+    filename: str
+    content_type: str | None = None
+    kind: str
+    created_at: datetime
+
+
 class TimeEntryCreate(BaseModel):
     hours: float = Field(gt=0)
     note: str | None = None
@@ -266,6 +275,7 @@ class WorkOrderDetail(WorkOrderSummary):
     quotes: list[QuoteOut] = []
     invoices: list[InvoiceOut] = []
     time_entries: list[TimeEntryOut] = []
+    attachments: list[AttachmentOut] = []
 
 
 # ---------- Dashboard ----------

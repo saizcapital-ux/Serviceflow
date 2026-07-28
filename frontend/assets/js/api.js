@@ -67,13 +67,31 @@ export const api = {
     request(`/api/portal/quotes/${quoteId}/decision`, { method: "POST", body: { approve, note } }),
 };
 
-/** Fetch an authenticated PDF and open it in a new tab (blob URL). */
-export async function openPdf(invoiceId) {
-  const res = await fetch(`${API_BASE}/api/invoices/${invoiceId}/pdf`, {
+/** Fetch an authenticated binary endpoint and open it in a new tab (blob URL). */
+export async function openAuthed(path) {
+  const res = await fetch(`${API_BASE}${path}`, {
     headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
   });
-  if (!res.ok) throw new Error("Could not load PDF");
+  if (!res.ok) throw new Error("Could not load file");
   const url = URL.createObjectURL(await res.blob());
   window.open(url, "_blank");
   setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+export const openPdf = (invoiceId) => openAuthed(`/api/invoices/${invoiceId}/pdf`);
+export const openAttachment = (attachmentId) => openAuthed(`/api/attachments/${attachmentId}/file`);
+
+/** Upload a file to a work order (multipart). */
+export async function uploadAttachment(woId, file, kind) {
+  const form = new FormData();
+  form.append("file", file);
+  form.append("kind", kind);
+  const res = await fetch(`${API_BASE}/api/work-orders/${woId}/attachments`, {
+    method: "POST",
+    headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    body: form,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.detail || `Upload failed (${res.status})`);
+  return data;
 }

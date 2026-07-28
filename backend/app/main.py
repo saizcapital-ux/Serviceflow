@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import auth, customers, dashboard, invoices, portal, work_orders
+from app.api.routers import attachments, auth, customers, dashboard, invoices, portal, work_orders
 from app.core.config import settings
 from app.core.database import Base, engine
 
@@ -29,6 +29,7 @@ app.include_router(dashboard.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
 app.include_router(invoices.router)
+app.include_router(attachments.router)
 app.include_router(portal.router)
 
 

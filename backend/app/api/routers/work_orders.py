@@ -53,6 +53,7 @@ def _load_detail(db: Session, wo_id: int, org_id: int) -> WorkOrder:
             selectinload(WorkOrder.quotes).selectinload(Quote.lines),
             selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
             selectinload(WorkOrder.time_entries),
+            selectinload(WorkOrder.attachments),
         )
     )
     if not wo:
