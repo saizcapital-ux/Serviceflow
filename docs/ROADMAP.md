@@ -30,14 +30,19 @@ A pragmatic path from the current MVP to a sellable, scalable SaaS.
 - Accounting sync (QuickBooks/Xero), Stripe card-capture UI & customer portal for billing
 - Async task queue for notifications (Celery/RQ) + SMS provider (Twilio)
 
-## 🌤 v2 — "Grow"
+## ✅ v2 — "Grow" (delivered)
 
-- Inventory & parts catalog with reorder points
-- Barcode/QR asset tags (scan to open the asset)
-- Customer PO tracking & approval limits
-- Reporting suite (throughput, turnaround time, first-pass yield, revenue)
-- Configurable workflows per shop (custom statuses, checklists/travelers)
-- Mobile technician app (PWA) with offline job capture
+- ✅ Inventory & parts catalog with reorder points + job consumption
+- ✅ QR asset tags (scan to open the asset) + printable labels
+- ✅ Customer PO tracking & approval limits
+- ✅ Reporting suite (throughput, turnaround, revenue, workload, pipeline)
+- ✅ Job checklists / travelers (per-equipment-type templates)
+- ✅ Installable PWA (manifest + service worker, offline app shell)
+
+### v2 follow-ups still open
+- Barcode (not just QR) scanning from a camera; first-pass-yield metric
+- Offline **job capture** (queue writes while offline, sync on reconnect)
+- Fully configurable statuses per shop
 
 ## 🏔 v3 — "Scale & enterprise"
 

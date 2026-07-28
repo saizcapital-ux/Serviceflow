@@ -35,6 +35,14 @@ record:
   quotes, download invoices, and pull the complete service history.
 - **Multi-tenant SaaS** — Isolated tenants with **Stripe subscription billing**
   (Starter/Pro/Enterprise; mock mode for demos).
+- **Inventory** — Parts catalog with reorder points; parts consumed on jobs
+  decrement stock.
+- **QR asset tags** — Scan a printed tag to open an asset's full repair history.
+- **Analytics** — Throughput, turnaround, revenue, pipeline and technician
+  workload at a glance.
+- **Travelers** — Per-equipment-type checklist templates applied to jobs.
+- **Installable PWA** — Add the app to a phone's home screen; shell works
+  offline.
 
 ---
 
