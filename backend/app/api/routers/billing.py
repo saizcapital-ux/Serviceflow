@@ -7,7 +7,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models import Organization, User, UserRole
 from app.schemas import CheckoutRequest, PlanOut, SubscriptionOut
-from app.services import saas_billing
+from app.services import audit, saas_billing
 
 router = APIRouter(prefix="/api/billing", tags=["billing"])
 
@@ -37,6 +37,9 @@ def checkout(
         result = saas_billing.start_checkout(db, org, payload.plan_id)
     except saas_billing.BillingError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    audit.record(db, organization_id=user.organization_id, actor=user, action="billing.checkout",
+                 summary=f"Subscription checkout for '{payload.plan_id}' plan", entity_type="organization",
+                 entity_id=user.organization_id, meta={"plan": payload.plan_id})
     db.commit()
     return result
 
@@ -45,6 +48,8 @@ def checkout(
 def cancel_subscription(db: Session = Depends(get_db), user: User = Depends(require_roles(UserRole.owner))):
     org = db.get(Organization, user.organization_id)
     saas_billing.cancel(db, org)
+    audit.record(db, organization_id=user.organization_id, actor=user, action="billing.canceled",
+                 summary="Canceled the subscription", entity_type="organization", entity_id=org.id)
     db.commit()
     db.refresh(org)
     return org

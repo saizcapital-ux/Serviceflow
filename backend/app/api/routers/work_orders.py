@@ -44,7 +44,7 @@ from app.schemas import (
     WorkOrderSummary,
     WorkOrderUpdate,
 )
-from app.services import notifications, workflow
+from app.services import audit, notifications, workflow
 
 router = APIRouter(prefix="/api/work-orders", tags=["work-orders"])
 
@@ -119,6 +119,8 @@ def create_work_order(payload: WorkOrderCreate, db: Session = Depends(get_db), u
             visible_to_customer=True,
         )
     )
+    audit.record(db, organization_id=user.organization_id, actor=user, action="work_order.created",
+                 summary=f"Created work order {number} — {wo.title}", entity_type="work_order", entity_id=wo.id)
     db.commit()
     return _load_detail(db, wo.id, user.organization_id)
 
@@ -159,6 +161,9 @@ def change_status(
         notifications.notify_customer_status(
             db, wo, payload.message or f"Status updated to {payload.status.value.replace('_', ' ')}."
         )
+    audit.record(db, organization_id=user.organization_id, actor=user, action="work_order.status_changed",
+                 summary=f"{wo.number} → {payload.status.value.replace('_', ' ')}",
+                 entity_type="work_order", entity_id=wo.id, meta={"status": payload.status.value})
     db.commit()
     return _load_detail(db, wo_id, user.organization_id)
 
@@ -182,6 +187,9 @@ def schedule_visit(wo_id: int, payload: ScheduleRequest, db: Session = Depends(g
     )
     if payload.notify_customer:
         notifications.notify_customer_status(db, wo, f"Field visit scheduled for {when}.")
+    audit.record(db, organization_id=user.organization_id, actor=user, action="work_order.scheduled",
+                 summary=f"Scheduled field visit for {wo.number} on {when}",
+                 entity_type="work_order", entity_id=wo.id)
     db.commit()
     return _load_detail(db, wo_id, user.organization_id)
 
@@ -240,6 +248,9 @@ def create_quote(
         )
     )
     notifications.notify_quote_sent(db, wo, quote.number, quote.total)
+    audit.record(db, organization_id=user.organization_id, actor=user, action="quote.sent",
+                 summary=f"Sent quote {quote.number} on {wo.number} (${quote.total:,.2f})",
+                 entity_type="work_order", entity_id=wo.id)
     db.commit()
     db.refresh(quote)
     return quote
@@ -293,6 +304,9 @@ def consume_part(wo_id: int, payload: PartUsageCreate, db: Session = Depends(get
     usage = PartUsage(work_order_id=wo.id, part_id=part.id, quantity=payload.quantity,
                       unit_price=part.unit_price, used_by=user.id)
     db.add(usage)
+    audit.record(db, organization_id=user.organization_id, actor=user, action="part.consumed",
+                 summary=f"Used {payload.quantity} × {part.sku} on {wo.number}",
+                 entity_type="part", entity_id=part.id)
     db.commit()
     db.refresh(usage)
     return usage

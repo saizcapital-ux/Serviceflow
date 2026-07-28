@@ -340,6 +340,21 @@ class PartUsage(Base):
     part: Mapped[Part] = relationship()
 
 
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    actor_label: Mapped[str] = mapped_column(String(200), default="system")
+    action: Mapped[str] = mapped_column(String(60), index=True)  # e.g. work_order.status_changed
+    entity_type: Mapped[str | None] = mapped_column(String(40))
+    entity_id: Mapped[int | None] = mapped_column(Integer)
+    summary: Mapped[str] = mapped_column(Text)
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
 class Notification(Base):
     __tablename__ = "notifications"
 

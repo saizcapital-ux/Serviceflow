@@ -15,7 +15,7 @@ from app.schemas import (
     WorkOrderDetail,
     WorkOrderSummary,
 )
-from app.services import workflow
+from app.services import audit, workflow
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
 
@@ -108,6 +108,11 @@ def decide_quote(
         )
     except workflow.TransitionError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    audit.record(db, organization_id=user.organization_id, actor=user,
+                 action="quote.approved" if payload.approve else "quote.rejected",
+                 summary=f"Customer {'approved' if payload.approve else 'declined'} quote {quote.number}"
+                         + (f" (PO {payload.po_number})" if payload.po_number else ""),
+                 entity_type="work_order", entity_id=wo.id)
     db.commit()
     db.refresh(quote)
     return quote

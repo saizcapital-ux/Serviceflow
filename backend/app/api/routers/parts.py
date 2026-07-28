@@ -7,6 +7,7 @@ from app.api.deps import require_staff
 from app.core.database import get_db
 from app.models import Part, User
 from app.schemas import PartAdjust, PartCreate, PartOut, PartUpdate
+from app.services import audit
 
 router = APIRouter(prefix="/api/parts", tags=["parts"])
 
@@ -62,6 +63,10 @@ def adjust_stock(part_id: int, payload: PartAdjust, db: Session = Depends(get_db
     if new_qty < 0:
         raise HTTPException(status.HTTP_409_CONFLICT, "Adjustment would drop stock below zero.")
     part.quantity_on_hand = new_qty
+    audit.record(db, organization_id=user.organization_id, actor=user, action="part.adjusted",
+                 summary=f"Adjusted {part.sku} by {payload.delta:+d} → {new_qty} on hand"
+                         + (f" ({payload.reason})" if payload.reason else ""),
+                 entity_type="part", entity_id=part.id)
     db.commit()
     db.refresh(part)
     return part

@@ -77,6 +77,8 @@ export const api = {
   subscription: () => request("/api/billing/subscription"),
   checkout: (planId) => request("/api/billing/checkout", { method: "POST", body: { plan_id: planId } }),
   cancelSubscription: () => request("/api/billing/cancel", { method: "POST" }),
+  // audit
+  audit: (action) => request(`/api/audit${action ? `?action=${encodeURIComponent(action)}` : ""}`),
   // notifications
   notifications: () => request("/api/notifications"),
   // invoices

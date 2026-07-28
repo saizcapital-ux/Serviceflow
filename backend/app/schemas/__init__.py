@@ -298,6 +298,16 @@ class ApplyTemplate(BaseModel):
     template_id: int
 
 
+class AuditLogOut(ORMModel):
+    id: int
+    actor_label: str
+    action: str
+    entity_type: str | None = None
+    entity_id: int | None = None
+    summary: str
+    created_at: datetime
+
+
 class NotificationOut(ORMModel):
     id: int
     channel: NotificationChannel

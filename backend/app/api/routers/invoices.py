@@ -19,7 +19,7 @@ from app.models import (
     WorkOrder,
 )
 from app.schemas import InvoiceCreate, InvoiceOut, MarkPaid
-from app.services import billing
+from app.services import audit, billing
 from app.services.pdf import render_invoice_pdf
 
 router = APIRouter(prefix="/api", tags=["invoices"])
@@ -59,6 +59,9 @@ def create_invoice(wo_id: int, payload: InvoiceCreate, db: Session = Depends(get
         )
     except billing.BillingError as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    audit.record(db, organization_id=user.organization_id, actor=user, action="invoice.created",
+                 summary=f"Issued invoice {invoice.number} (${invoice.total:,.2f})",
+                 entity_type="invoice", entity_id=invoice.id)
     db.commit()
     return _load_invoice(db, invoice.id, user.organization_id)
 
@@ -68,6 +71,10 @@ def mark_paid(invoice_id: int, payload: MarkPaid, db: Session = Depends(get_db),
     inv = _load_invoice(db, invoice_id, user.organization_id)
     inv.status = InvoiceStatus.paid if payload.paid else InvoiceStatus.sent
     inv.paid_at = datetime.now(timezone.utc) if payload.paid else None
+    audit.record(db, organization_id=user.organization_id, actor=user,
+                 action="invoice.paid" if payload.paid else "invoice.unpaid",
+                 summary=f"Marked invoice {inv.number} {'paid' if payload.paid else 'unpaid'} (${inv.total:,.2f})",
+                 entity_type="invoice", entity_id=inv.id)
     db.commit()
     return _load_invoice(db, invoice_id, user.organization_id)
 

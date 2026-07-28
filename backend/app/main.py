@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routers import (
     analytics,
     attachments,
+    audit,
     auth,
     billing,
     checklists,
@@ -44,6 +45,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(analytics.router)
+app.include_router(audit.router)
 app.include_router(billing.router)
 app.include_router(team.router)
 app.include_router(customers.router)

@@ -18,6 +18,8 @@ function boot() {
   el("#whoRole").textContent = (u.role || "").replace("_", " ");
   el("#logout").addEventListener("click", () => { auth.clear(); location.href = "/login.html"; });
   el("#newWoBtn").addEventListener("click", openNewWorkOrder);
+  // Audit log is owner/manager only.
+  if (!["owner", "manager"].includes(u.role)) el("#navAudit")?.classList.add("hide");
   els(".nav-link[data-route]").forEach((a) =>
     a.addEventListener("click", () => (location.hash = `#/${a.dataset.route}`)));
   window.addEventListener("hashchange", router);
@@ -47,6 +49,7 @@ async function router() {
     if (route === "inventory") return renderInventory();
     if (route === "invoices") return renderInvoices();
     if (route === "notifications") return renderNotifications();
+    if (route === "audit") return renderAudit();
     if (route === "billing") return renderBilling();
     if (route === "analytics") return renderAnalytics();
     renderDashboard();
@@ -1071,6 +1074,49 @@ async function renderBilling() {
     try { await api.cancelSubscription(); toast("Subscription canceled", ""); renderBilling(); }
     catch (ex) { toast(ex.message, "err"); }
   });
+}
+
+/* ---------- audit log ---------- */
+const AUDIT_META = {
+  "user.login": ["🔑", "var(--st-intake)"],
+  "work_order.created": ["🆕", "var(--brand-500)"],
+  "work_order.status_changed": ["🔄", "var(--st-repair)"],
+  "work_order.scheduled": ["📅", "var(--st-testing)"],
+  "quote.sent": ["📤", "var(--st-quote)"],
+  "quote.approved": ["✅", "var(--ok)"],
+  "quote.rejected": ["🚫", "var(--danger)"],
+  "invoice.created": ["🧾", "var(--st-quote)"],
+  "invoice.paid": ["💰", "var(--ok)"],
+  "invoice.unpaid": ["↩️", "var(--st-hold)"],
+  "part.consumed": ["📦", "var(--st-repair)"],
+  "part.adjusted": ["📊", "var(--st-shipped)"],
+  "billing.checkout": ["💳", "var(--brand-600)"],
+  "billing.canceled": ["✖️", "var(--danger)"],
+};
+
+async function renderAudit(filter = "") {
+  loading();
+  const list = await api.audit(filter);
+  const actions = [...new Set(list.map((e) => e.action))];
+  const chip = (a, label) => `<button class="btn btn-ghost btn-sm afilter" data-a="${a}"
+    style="${a === filter ? "border-color:var(--brand-500);color:var(--brand-700)" : ""}">${label}</button>`;
+  view.innerHTML = `
+    <div class="page-title"><h1>Audit log</h1><span class="muted">Who did what, across the workspace</span></div>
+    <div class="row wrap" style="margin-bottom:16px">${chip("", "All")}
+      ${actions.map((a) => chip(a, `${(AUDIT_META[a] || ["•"])[0]} ${a.replace(/[._]/g, " ")}`)).join("")}</div>
+    <div class="card"><div class="table-wrap"><table class="data">
+      <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>
+      <tbody>${list.map((e) => {
+        const [ic, color] = AUDIT_META[e.action] || ["•", "var(--ink-500)"];
+        return `<tr data-nostyle>
+          <td class="muted nowrap">${fmtDateTime(e.created_at)}</td>
+          <td>${esc(e.actor_label)}</td>
+          <td><span class="badge" style="background:${color};color:#fff">${ic} ${esc(e.action.replace(/[._]/g, " "))}</span></td>
+          <td>${esc(e.summary)}</td></tr>`;
+      }).join("") || '<tr><td colspan="4" class="empty" style="padding:32px"><div class="big">📜</div>No activity recorded yet.</td></tr>'}
+      </tbody></table></div></div>`;
+  els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
+  els(".afilter").forEach((b) => b.addEventListener("click", () => renderAudit(b.dataset.a)));
 }
 
 /* ---------- notifications ---------- */

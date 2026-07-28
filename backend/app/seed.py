@@ -12,6 +12,7 @@ from app.core.database import Base, SessionLocal, engine
 from app.core.security import hash_password
 from app.models import (
     Attachment,
+    AuditLog,
     ChecklistItem,
     ChecklistTemplate,
     Contact,
@@ -304,6 +305,26 @@ def seed() -> None:
             Part(organization_id=org.id, sku="TQ-SW-SMB", name="Limitorque torque switch",
                  description="SMB torque switch assembly", unit_cost=180.0, unit_price=340.0,
                  quantity_on_hand=5, reorder_point=2, location="Bin E-01"),
+        ])
+
+        # A few historical audit-trail entries for the demo.
+        now = datetime.now(timezone.utc)
+        db.add_all([
+            AuditLog(organization_id=org.id, actor_user_id=writer.id, actor_label="Marcus Reed",
+                     action="work_order.created", summary="Created work order WO-2026-0001 — 250HP motor rewind",
+                     entity_type="work_order", entity_id=wo1.id, created_at=now - timedelta(days=3, hours=2)),
+            AuditLog(organization_id=org.id, actor_user_id=tech.id, actor_label="Priya Nair",
+                     action="quote.sent", summary="Sent quote WO-2026-0001-Q1 ($9,180.00)",
+                     entity_type="work_order", entity_id=wo1.id, created_at=now - timedelta(days=2, hours=5)),
+            AuditLog(organization_id=org.id, actor_user_id=None, actor_label="Sam Whitfield",
+                     action="quote.approved", summary="Customer approved quote WO-2026-0001-Q1",
+                     entity_type="work_order", entity_id=wo1.id, created_at=now - timedelta(days=2, hours=1)),
+            AuditLog(organization_id=org.id, actor_user_id=admin.id, actor_label="Dana Okafor",
+                     action="billing.checkout", summary="Subscribed to 'pro' plan",
+                     entity_type="organization", entity_id=org.id, created_at=now - timedelta(days=6)),
+            AuditLog(organization_id=org.id, actor_user_id=tech.id, actor_label="Priya Nair",
+                     action="part.adjusted", summary="Adjusted BRG-6314N by -2 → 6 on hand",
+                     entity_type="part", entity_id=None, created_at=now - timedelta(hours=8)),
         ])
 
         db.flush()

@@ -208,6 +208,25 @@ def test_consume_part_decrements_stock(client, staff_headers):
     assert bad.status_code == 409
 
 
+def test_audit_log_records_actions(client, staff_headers):
+    # Login (staff_headers fixture) + creating a WO should both be audited.
+    cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]
+    client.post("/api/work-orders", headers=staff_headers, json={"customer_id": cid, "title": "Audit WO"})
+    entries = client.get("/api/audit", headers=staff_headers).json()
+    actions = {e["action"] for e in entries}
+    assert "user.login" in actions
+    assert "work_order.created" in actions
+    # Filter works
+    created = client.get("/api/audit?action=work_order.created", headers=staff_headers).json()
+    assert created and all(e["action"] == "work_order.created" for e in created)
+
+
+def test_audit_log_owner_manager_only(client):
+    tok = client.post("/api/auth/login", json={"email": "tech@apexrepair.com", "password": "Password123"}).json()["access_token"]
+    h = {"Authorization": f"Bearer {tok}"}
+    assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
+
+
 def test_analytics_summary(client, staff_headers):
     a = client.get("/api/analytics/summary", headers=staff_headers).json()
     assert set(a) >= {"completed_30d", "avg_turnaround_days", "revenue_by_month",
