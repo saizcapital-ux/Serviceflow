@@ -307,6 +307,28 @@ def test_audit_log_owner_manager_only(client):
     assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
 
 
+def test_csv_export_work_orders(client, staff_headers):
+    r = client.get("/api/work-orders/export.csv", headers=staff_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv")
+    assert 'filename="work-orders.csv"' in r.headers.get("content-disposition", "")
+    lines = r.text.strip().splitlines()
+    assert lines[0].startswith("Number,Status,Priority")
+    assert any("WO-2026-0001" in ln for ln in lines[1:])
+
+
+def test_csv_export_invoices(client, staff_headers):
+    r = client.get("/api/invoices/export.csv", headers=staff_headers)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    lines = r.text.strip().splitlines()
+    assert lines[0].startswith("Number,Status,Customer")
+    assert any("INV-2025-0031" in ln for ln in lines[1:])
+
+
+def test_csv_export_requires_staff(client, portal_headers):
+    assert client.get("/api/work-orders/export.csv", headers=portal_headers).status_code == 403
+
+
 def test_global_search(client, staff_headers):
     # By work order number
     r = client.get("/api/search?q=WO-2026-0001", headers=staff_headers).json()

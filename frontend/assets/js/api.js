@@ -131,6 +131,18 @@ export async function openAuthed(path) {
 export const openPdf = (invoiceId) => openAuthed(`/api/invoices/${invoiceId}/pdf`);
 export const openAttachment = (attachmentId) => openAuthed(`/api/attachments/${attachmentId}/file`);
 
+/** Fetch an authed file and trigger a browser download with the given filename. */
+export async function downloadAuthed(path, filename) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+  });
+  if (!res.ok) throw new Error("Export failed");
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+
 /** Fetch an authenticated text/SVG endpoint and return the body text. */
 export async function fetchAuthedText(path) {
   const res = await fetch(`${API_BASE}${path}`, {

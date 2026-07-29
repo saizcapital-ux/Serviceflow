@@ -1,8 +1,10 @@
 """Invoice endpoints: create from approved quote, list, PDF export, mark paid."""
+import csv
+import io
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -42,6 +44,32 @@ def list_invoices(customer_id: int | None = None, db: Session = Depends(get_db),
     if customer_id:
         stmt = stmt.where(Invoice.customer_id == customer_id)
     return db.scalars(stmt.order_by(Invoice.issued_at.desc())).all()
+
+
+@router.get("/invoices/export.csv")
+def export_invoices(db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Download all invoices as CSV (with customer names)."""
+    invoices = db.scalars(
+        select(Invoice).where(Invoice.organization_id == user.organization_id).order_by(Invoice.issued_at.desc())
+    ).all()
+    names = {c.id: c.name for c in db.scalars(
+        select(Customer).where(Customer.organization_id == user.organization_id)).all()}
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Number", "Status", "Customer", "Work order", "Subtotal", "Tax", "Total",
+                "Issued", "Due", "Paid at"])
+    for inv in invoices:
+        w.writerow([
+            inv.number, inv.status.value, names.get(inv.customer_id, ""), f"WO#{inv.work_order_id}",
+            f"{inv.subtotal:.2f}", f"{inv.tax:.2f}", f"{inv.total:.2f}",
+            inv.issued_at.date().isoformat() if inv.issued_at else "",
+            inv.due_date or "", inv.paid_at.date().isoformat() if inv.paid_at else "",
+        ])
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]), media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="invoices.csv"'},
+    )
 
 
 @router.post("/work-orders/{wo_id}/invoices", response_model=InvoiceOut, status_code=status.HTTP_201_CREATED)

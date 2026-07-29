@@ -1,7 +1,10 @@
 """Work-order lifecycle endpoints (staff)."""
+import csv
+import io
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -96,6 +99,34 @@ def list_work_orders(
     if service_type:
         stmt = stmt.where(WorkOrder.service_type == service_type)
     return db.scalars(stmt.order_by(WorkOrder.created_at.desc())).all()
+
+
+@router.get("/export.csv")
+def export_work_orders(db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Download all work orders as CSV (with customer & equipment names)."""
+    wos = db.scalars(
+        select(WorkOrder)
+        .where(WorkOrder.organization_id == user.organization_id)
+        .options(selectinload(WorkOrder.customer), selectinload(WorkOrder.equipment))
+        .order_by(WorkOrder.created_at.desc())
+    ).all()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Number", "Status", "Priority", "Service type", "Customer", "Equipment",
+                "PO number", "Promised", "Estimate", "Actual", "Created"])
+    for o in wos:
+        w.writerow([
+            o.number, o.status.value, o.priority.value, o.service_type.value,
+            o.customer.name if o.customer else "",
+            (o.equipment.tag or o.equipment.serial_number or "") if o.equipment else "",
+            o.po_number or "", o.promised_date or "", f"{o.total_estimate:.2f}",
+            f"{o.total_actual:.2f}", o.created_at.date().isoformat() if o.created_at else "",
+        ])
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]), media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="work-orders.csv"'},
+    )
 
 
 @router.post("", response_model=WorkOrderDetail, status_code=status.HTTP_201_CREATED)

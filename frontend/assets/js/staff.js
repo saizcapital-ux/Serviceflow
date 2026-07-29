@@ -1,5 +1,5 @@
 /* Staff application — hash-routed SPA for service-center employees. */
-import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText, downloadAuthed } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge, slaBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
@@ -218,7 +218,9 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
     </div>`;
   view.innerHTML = `
     <div class="page-title"><h1>${title}</h1>
-      <button class="btn btn-primary btn-sm" id="pgNew">+ New Work Order</button></div>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="exportWo">⬇ Export CSV</button>
+        <button class="btn btn-primary btn-sm" id="pgNew">+ New Work Order</button></div></div>
     ${title === "Work Orders" ? filterBar : ""}
     <div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>WO #</th><th>Equipment</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>SLA</th><th>Promised</th></tr></thead>
@@ -233,6 +235,8 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
         <td class="nowrap muted">${fmtDate(w.promised_date)}</td></tr>`).join("") || emptyRow(8)}
       </tbody></table></div></div>`;
   el("#pgNew").addEventListener("click", openNewWorkOrder);
+  el("#exportWo").addEventListener("click", () =>
+    downloadAuthed("/api/work-orders/export.csv", "work-orders.csv").catch((e) => toast(e.message, "err")));
   els(".filter").forEach((b) => b.addEventListener("click", () => {
     const s = b.dataset.status; renderWorkOrders(s ? { status: s } : {}, "Work Orders");
   }));
@@ -1032,8 +1036,10 @@ async function renderInvoices() {
     .reduce((s, i) => s + i.total, 0);
   view.innerHTML = `
     <div class="page-title"><h1>Invoices</h1>
-      <div class="stat" style="padding:10px 16px"><div class="stat-label">Outstanding</div>
-        <div class="stat-value" style="font-size:1.4rem">${money(outstanding)}</div></div></div>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="exportInv">⬇ Export CSV</button>
+        <div class="stat" style="padding:10px 16px"><div class="stat-label">Outstanding</div>
+          <div class="stat-value" style="font-size:1.4rem">${money(outstanding)}</div></div></div></div>
     <div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>Invoice #</th><th>Customer</th><th>Work order</th><th>Status</th><th class="text-right">Total</th><th>Due</th><th></th></tr></thead>
       <tbody>${list.map((i) => `<tr data-nostyle>
@@ -1048,6 +1054,8 @@ async function renderInvoices() {
       '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No invoices yet.</td></tr>'}
       </tbody></table></div></div>`;
   els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
+  el("#exportInv").addEventListener("click", () =>
+    downloadAuthed("/api/invoices/export.csv", "invoices.csv").catch((e) => toast(e.message, "err")));
   els("[data-inv-pdf]").forEach((b) =>
     b.addEventListener("click", () => openPdf(b.dataset.invPdf).catch((e) => toast(e.message, "err"))));
   els("[data-inv-paid]").forEach((b) =>
