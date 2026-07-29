@@ -40,6 +40,11 @@
           <strong id="orgName">Service Center</strong>
           <select id="locSwitcher" class="hide" style="max-width:220px;padding:.4rem .6rem"></select>
         </div>
+        <div style="position:relative;flex:1;max-width:420px;margin:0 16px">
+          <input id="globalSearch" type="search" placeholder="🔍 Search work orders, customers, equipment…"
+                 autocomplete="off" style="padding:.5rem .7rem" />
+          <div id="searchResults" class="card hide" style="position:absolute;top:110%;left:0;right:0;z-index:40;max-height:60vh;overflow:auto;box-shadow:var(--sh-lg)"></div>
+        </div>
         <div class="row">
           <button class="btn btn-primary btn-sm" id="newWoBtn">+ New Work Order</button>
         </div>

@@ -34,6 +34,8 @@ export const api = {
   // auth
   login: (email, password) => request("/api/auth/login", { method: "POST", body: { email, password }, auth: false }),
   me: () => request("/api/auth/me"),
+  // search
+  search: (q) => request(`/api/search?q=${encodeURIComponent(q)}`),
   // dashboard
   dashboard: (locationId) => request(`/api/dashboard${locationId ? `?location_id=${locationId}` : ""}`),
   // locations

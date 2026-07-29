@@ -26,9 +26,49 @@ function boot() {
   els(".nav-link[data-route]").forEach((a) =>
     a.addEventListener("click", () => (location.hash = `#/${a.dataset.route}`)));
   window.addEventListener("hashchange", router);
+  initSearch();
   initLocationSwitcher();
   if (!location.hash) location.hash = "#/dashboard";
   else router();
+}
+
+function initSearch() {
+  const input = el("#globalSearch"), box = el("#searchResults");
+  if (!input) return;
+  const TYPE = { work_order: ["🔧", "Work order"], customer: ["🏢", "Customer"], equipment: ["⚙️", "Equipment"] };
+  let items = [], active = -1, timer = null;
+
+  const close = () => { box.classList.add("hide"); active = -1; };
+  const go = (r) => { close(); input.value = ""; location.hash = r.route; };
+  const paint = () => {
+    if (!items.length) { box.innerHTML = '<div class="muted" style="padding:14px">No matches.</div>'; box.classList.remove("hide"); return; }
+    box.innerHTML = items.map((r, i) => `<div class="srow" data-i="${i}" style="display:flex;gap:10px;padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--line);${i === active ? "background:var(--surface-3)" : ""}">
+        <span>${TYPE[r.type][0]}</span>
+        <div style="min-width:0"><div style="font-weight:600">${esc(r.label)}</div>
+          <div class="muted" style="font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${TYPE[r.type][1]} · ${esc(r.sub || "")}</div></div></div>`).join("");
+    box.classList.remove("hide");
+    els(".srow", box).forEach((row) => {
+      row.addEventListener("mousedown", (e) => { e.preventDefault(); go(items[+row.dataset.i]); });
+    });
+  };
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 2) { close(); return; }
+    timer = setTimeout(async () => {
+      try { items = (await api.search(q)).results; active = -1; paint(); }
+      catch { close(); }
+    }, 180);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (box.classList.contains("hide")) return;
+    if (e.key === "ArrowDown") { e.preventDefault(); active = Math.min(active + 1, items.length - 1); paint(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(active - 1, 0); paint(); }
+    else if (e.key === "Enter" && active >= 0) { e.preventDefault(); go(items[active]); }
+    else if (e.key === "Escape") close();
+  });
+  input.addEventListener("blur", () => setTimeout(close, 120));
 }
 
 async function initLocationSwitcher() {

@@ -307,6 +307,25 @@ def test_audit_log_owner_manager_only(client):
     assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
 
 
+def test_global_search(client, staff_headers):
+    # By work order number
+    r = client.get("/api/search?q=WO-2026-0001", headers=staff_headers).json()
+    assert any(x["type"] == "work_order" and x["label"] == "WO-2026-0001" for x in r["results"])
+    # By customer name
+    r = client.get("/api/search?q=Acme", headers=staff_headers).json()
+    assert any(x["type"] == "customer" for x in r["results"])
+    # By equipment serial
+    r = client.get("/api/search?q=SN-MTR", headers=staff_headers).json()
+    assert any(x["type"] == "equipment" for x in r["results"])
+    # Every result carries a route
+    assert all("route" in x for x in r["results"])
+
+
+def test_search_requires_query_and_staff(client, staff_headers, portal_headers):
+    assert client.get("/api/search", headers=staff_headers).status_code == 422  # q required
+    assert client.get("/api/search?q=x", headers=portal_headers).status_code == 403
+
+
 def test_create_customer_contact_and_equipment(client, staff_headers):
     # Create a customer
     cust = client.post("/api/customers", headers=staff_headers,
