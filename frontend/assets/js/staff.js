@@ -1,5 +1,5 @@
 /* Staff application — hash-routed SPA for service-center employees. */
-import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText, downloadAuthed } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText, downloadAuthed, openAuthed } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge, slaBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal, initThemeToggle,
@@ -300,6 +300,7 @@ async function renderWorkOrder(id) {
         <span class="badge">${w.service_type === "field_service" ? "📍 Field Service" : "🏭 Shop Repair"}</span></div></div>
       <div class="row">
         <button class="btn btn-ghost btn-sm" id="editWo">✏️ Edit</button>
+        <button class="btn btn-ghost btn-sm" id="travelerBtn">🖨 Traveler</button>
         ${w.service_type === "field_service" ? '<button class="btn btn-ghost btn-sm" id="schedBtn">📅 Schedule</button>' : ""}
         <button class="btn btn-ghost btn-sm" id="addFinding">+ Finding</button>
         <button class="btn btn-ghost btn-sm" id="addQuote">+ Quote</button>
@@ -358,6 +359,8 @@ async function renderWorkOrder(id) {
     </div>`;
 
   el("#editWo").addEventListener("click", () => openEditWorkOrder(w));
+  el("#travelerBtn").addEventListener("click", () =>
+    openAuthed(`/api/work-orders/${w.id}/traveler.pdf`).catch((e) => toast(e.message, "err")));
   el("#advance").addEventListener("click", () => openStatusMenu(w));
   el("#addFinding").addEventListener("click", () => openFinding(w.id));
   el("#addQuote").addEventListener("click", () => openQuote(w.id));

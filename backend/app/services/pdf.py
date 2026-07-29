@@ -105,3 +105,89 @@ def render_invoice_pdf(*, org, invoice, work_order, customer, equipment) -> byte
 
     doc.build(story)
     return buf.getvalue()
+
+
+def render_work_order_pdf(*, org, work_order, customer, equipment, findings, checklist, parts) -> bytes:
+    """Render a shop-floor job traveler for a work order."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
+        leftMargin=0.7 * inch, rightMargin=0.7 * inch, title=f"Traveler {work_order.number}",
+    )
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
+    small = normal.clone("small2"); small.fontSize = 8; small.textColor = colors.HexColor("#64748b")
+    h = styles["Heading2"]; h.textColor = BRAND
+    story = []
+
+    header = Table(
+        [[Paragraph(f"<b>{org.name}</b><br/><font size=8 color='#64748b'>Job Traveler</font>", normal),
+          Paragraph(f"<b>{work_order.number}</b>", styles["Heading1"])]],
+        colWidths=[3.8 * inch, 3.0 * inch],
+    )
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    story += [header]
+
+    eq_line = "—"
+    if equipment:
+        eq_line = (f"{equipment.equipment_type.value.title()} · {equipment.manufacturer or ''} "
+                   f"{equipment.model or ''} · Tag {equipment.tag or '—'} · S/N {equipment.serial_number or '—'}")
+    meta = Table(
+        [
+            [Paragraph("<b>Customer</b>", small), Paragraph(customer.name if customer else "—", normal),
+             Paragraph("<b>Priority</b>", small), Paragraph(work_order.priority.value.title(), normal)],
+            [Paragraph("<b>Equipment</b>", small), Paragraph(eq_line, small),
+             Paragraph("<b>Promised</b>", small),
+             Paragraph(work_order.promised_date.strftime("%b %d, %Y") if work_order.promised_date else "—", normal)],
+            [Paragraph("<b>PO #</b>", small), Paragraph(work_order.po_number or "—", normal),
+             Paragraph("<b>Status</b>", small), Paragraph(work_order.status.value.replace("_", " ").title(), normal)],
+        ],
+        colWidths=[0.9 * inch, 3.4 * inch, 0.9 * inch, 1.6 * inch],
+    )
+    meta.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 2),
+                              ("BOTTOMPADDING", (0, 0), (-1, -1), 2)]))
+    story += [Spacer(1, 8), meta, Spacer(1, 12)]
+
+    story += [Paragraph("Reported problem", h),
+              Paragraph(work_order.problem_description or work_order.title, normal), Spacer(1, 10)]
+
+    if findings:
+        story += [Paragraph("Inspection findings", h)]
+        for f in findings:
+            story += [Paragraph(f"• <b>{f.title}</b> ({f.severity.value}) — {f.detail or ''}", small)]
+        story += [Spacer(1, 10)]
+
+    story += [Paragraph("Work checklist", h)]
+    if checklist:
+        rows = [["", "Step"]] + [["[X]" if it.is_done else "[  ]", it.label] for it in checklist]
+        tbl = Table(rows, colWidths=[0.5 * inch, 6.0 * inch])
+        tbl.setStyle(TableStyle([
+            ("FONTSIZE", (0, 0), (-1, -1), 9), ("BACKGROUND", (0, 0), (-1, 0), LIGHT),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story += [tbl]
+    else:
+        story += [Paragraph("No checklist applied.", small)]
+    story += [Spacer(1, 10)]
+
+    if parts:
+        story += [Paragraph("Parts used", h)]
+        for pu, name in parts:
+            story += [Paragraph(f"• {pu.quantity} × {name}", small)]
+        story += [Spacer(1, 10)]
+
+    signoff = Table(
+        [["Technician", "Date", "QC / Inspector", "Date"],
+         ["", "", "", ""]],
+        colWidths=[2.0 * inch, 1.2 * inch, 2.0 * inch, 1.2 * inch], rowHeights=[16, 34],
+    )
+    signoff.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, 0), 8), ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#64748b")),
+        ("LINEBELOW", (0, 1), (-1, 1), 0.6, colors.HexColor("#94a3b8")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    story += [Spacer(1, 14), Paragraph("Sign-off", h), signoff]
+
+    doc.build(story)
+    return buf.getvalue()

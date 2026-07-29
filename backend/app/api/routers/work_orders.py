@@ -4,7 +4,7 @@ import io
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -48,6 +48,7 @@ from app.schemas import (
     WorkOrderUpdate,
 )
 from app.services import audit, notifications, webhooks, workflow
+from app.services.pdf import render_work_order_pdf
 
 router = APIRouter(prefix="/api/work-orders", tags=["work-orders"])
 
@@ -162,6 +163,23 @@ def create_work_order(payload: WorkOrderCreate, db: Session = Depends(get_db), u
 @router.get("/{wo_id}", response_model=WorkOrderDetail)
 def get_work_order(wo_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
     return _load_detail(db, wo_id, user.organization_id)
+
+
+@router.get("/{wo_id}/traveler.pdf")
+def work_order_traveler(wo_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Printable shop-floor job traveler (PDF)."""
+    wo = _load_detail(db, wo_id, user.organization_id)
+    org = db.get(Organization, user.organization_id)
+    part_names = {p.id: p for p in db.scalars(
+        select(Part).where(Part.organization_id == user.organization_id)).all()}
+    parts = [(pu, (part_names.get(pu.part_id).name if part_names.get(pu.part_id) else f"Part #{pu.part_id}"))
+             for pu in wo.parts_used]
+    pdf = render_work_order_pdf(
+        org=org, work_order=wo, customer=wo.customer, equipment=wo.equipment,
+        findings=wo.findings, checklist=wo.checklist_items, parts=parts,
+    )
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{wo.number}-traveler.pdf"'})
 
 
 @router.patch("/{wo_id}", response_model=WorkOrderDetail)

@@ -307,6 +307,17 @@ def test_audit_log_owner_manager_only(client):
     assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
 
 
+def test_work_order_traveler_pdf(client, staff_headers):
+    # WO-2026-0001 has findings, a checklist, and parts in the seed.
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = next(w for w in wos if w["number"] == "WO-2026-0001")
+    r = client.get(f"/api/work-orders/{wo['id']}/traveler.pdf", headers=staff_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:4] == b"%PDF"
+    assert 'filename="WO-2026-0001-traveler.pdf"' in r.headers.get("content-disposition", "")
+
+
 def test_update_work_order_fields(client, staff_headers):
     techs = client.get("/api/users?role=technician", headers=staff_headers).json()
     wos = client.get("/api/work-orders", headers=staff_headers).json()
