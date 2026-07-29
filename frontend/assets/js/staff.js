@@ -299,6 +299,7 @@ async function renderWorkOrder(id) {
         ${slaBadge(w)}
         <span class="badge">${w.service_type === "field_service" ? "📍 Field Service" : "🏭 Shop Repair"}</span></div></div>
       <div class="row">
+        <button class="btn btn-ghost btn-sm" id="editWo">✏️ Edit</button>
         ${w.service_type === "field_service" ? '<button class="btn btn-ghost btn-sm" id="schedBtn">📅 Schedule</button>' : ""}
         <button class="btn btn-ghost btn-sm" id="addFinding">+ Finding</button>
         <button class="btn btn-ghost btn-sm" id="addQuote">+ Quote</button>
@@ -356,6 +357,7 @@ async function renderWorkOrder(id) {
       </div>
     </div>`;
 
+  el("#editWo").addEventListener("click", () => openEditWorkOrder(w));
   el("#advance").addEventListener("click", () => openStatusMenu(w));
   el("#addFinding").addEventListener("click", () => openFinding(w.id));
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
@@ -615,6 +617,39 @@ const NEXT = {
   shipped: ["closed"],
   on_hold: ["inspection", "in_repair", "cancelled"],
 };
+
+async function openEditWorkOrder(w) {
+  const techs = techCache || (techCache = await api.users("technician"));
+  const prio = ["low", "normal", "high", "rush"];
+  const promised = w.promised_date ? w.promised_date.slice(0, 10) : "";
+  const m = modal(`<div class="card-head"><h3>Edit ${esc(w.number)}</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Title</span><input id="et" value="${esc(w.title)}" /></label>
+      <label class="field"><span>Problem description</span><textarea id="ep">${esc(w.problem_description || "")}</textarea></label>
+      <div class="row">
+        <label class="field grow"><span>Priority</span><select id="epr">
+          ${prio.map((x) => `<option value="${x}" ${x === w.priority ? "selected" : ""}>${x[0].toUpperCase() + x.slice(1)}</option>`).join("")}</select></label>
+        <label class="field grow"><span>Promised date</span><input type="date" id="epd" value="${promised}" /></label>
+      </div>
+      <label class="field"><span>Assigned technician</span><select id="ea">
+        <option value="">— unassigned —</option>
+        ${techs.map((t) => `<option value="${t.id}" ${t.id === w.assigned_to ? "selected" : ""}>${esc(t.full_name)}</option>`).join("")}</select></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="ecx">Cancel</button>
+        <button class="btn btn-primary" id="eok">Save changes</button></div></div>`);
+  el("#ecx", m.root).onclick = m.close;
+  el("#eok", m.root).onclick = async () => {
+    const title = el("#et", m.root).value.trim();
+    if (!title) return toast("Title is required", "err");
+    try {
+      await api.updateWorkOrder(w.id, {
+        title, problem_description: el("#ep", m.root).value.trim() || null,
+        priority: el("#epr", m.root).value, promised_date: el("#epd", m.root).value || null,
+        assigned_to: +el("#ea", m.root).value || null,
+      });
+      m.close(); toast("Work order updated", "ok"); renderWorkOrder(w.id);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
 
 function openStatusMenu(w) {
   const opts = NEXT[w.status] || [];

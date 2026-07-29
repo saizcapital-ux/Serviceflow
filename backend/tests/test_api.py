@@ -307,6 +307,21 @@ def test_audit_log_owner_manager_only(client):
     assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
 
 
+def test_update_work_order_fields(client, staff_headers):
+    techs = client.get("/api/users?role=technician", headers=staff_headers).json()
+    wos = client.get("/api/work-orders", headers=staff_headers).json()
+    wo = wos[0]
+    r = client.patch(f"/api/work-orders/{wo['id']}", headers=staff_headers, json={
+        "title": "Edited title", "priority": "rush", "promised_date": "2026-09-15",
+        "problem_description": "Updated scope", "assigned_to": techs[0]["id"],
+    })
+    assert r.status_code == 200
+    d = r.json()
+    assert d["title"] == "Edited title" and d["priority"] == "rush"
+    assert d["promised_date"] == "2026-09-15" and d["assigned_to"] == techs[0]["id"]
+    assert d["problem_description"] == "Updated scope"
+
+
 def test_csv_export_work_orders(client, staff_headers):
     r = client.get("/api/work-orders/export.csv", headers=staff_headers)
     assert r.status_code == 200
