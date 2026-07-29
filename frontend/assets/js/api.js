@@ -81,6 +81,7 @@ export const api = {
   consumePart: (woId, b) => request(`/api/work-orders/${woId}/parts`, { method: "POST", body: b }),
   // analytics
   analytics: () => request("/api/analytics/summary"),
+  reliability: () => request("/api/analytics/reliability"),
   // billing (SaaS subscription)
   plans: () => request("/api/billing/plans"),
   subscription: () => request("/api/billing/subscription"),

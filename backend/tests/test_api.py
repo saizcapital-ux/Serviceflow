@@ -307,6 +307,21 @@ def test_audit_log_owner_manager_only(client):
     assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
 
 
+def test_asset_reliability(client, staff_headers):
+    rows = client.get("/api/analytics/reliability", headers=staff_headers).json()
+    assert isinstance(rows, list) and rows
+    # The seeded motor (MTR-4471) has 2 work orders → MTBR computed
+    motor = next((r for r in rows if r["tag"] == "MTR-4471"), None)
+    assert motor is not None
+    assert motor["repairs_total"] >= 2
+    assert motor["mtbr_days"] is not None  # 2+ repairs -> interval known
+    assert set(rows[0]) >= {"equipment_id", "repairs_12mo", "watch", "last_repair"}
+
+
+def test_reliability_requires_staff(client, portal_headers):
+    assert client.get("/api/analytics/reliability", headers=portal_headers).status_code == 403
+
+
 def test_dashboard_sla_counts(client, staff_headers):
     d = client.get("/api/dashboard", headers=staff_headers).json()
     assert "overdue_open" in d and "due_soon_open" in d

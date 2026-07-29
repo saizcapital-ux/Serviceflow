@@ -777,6 +777,8 @@ async function renderEquipmentDetail(id) {
             <thead><tr><th>WO #</th><th>Title</th><th>Status</th><th>Opened</th></tr></thead>
             <tbody>${rows}</tbody></table></div></div>
       </div>
+      <div class="card"><div class="card-head"><h3>Reliability</h3></div>
+        <div class="card-body">${reliabilityCard(history)}</div></div>
       <div class="card"><div class="card-head"><h3>Asset tag</h3>
         <button class="btn btn-ghost btn-sm" id="printLabel">🖨 Print label</button></div>
         <div class="card-body" style="text-align:center">
@@ -789,6 +791,29 @@ async function renderEquipmentDetail(id) {
   try { svg = await fetchAuthedText(`/api/equipment/${id}/qr.svg`); el("#qrBox").innerHTML = svg; }
   catch { el("#qrBox").innerHTML = '<span class="muted">QR unavailable</span>'; }
   el("#printLabel").addEventListener("click", () => printLabel(eq, owner, svg));
+}
+
+function reliabilityCard(history) {
+  if (!history.length) return '<p class="muted">No repair history yet.</p>';
+  const dates = history.map((w) => new Date(w.created_at)).sort((a, b) => a - b);
+  const yearAgo = new Date(); yearAgo.setFullYear(yearAgo.getFullYear() - 1);
+  const in12mo = dates.filter((d) => d >= yearAgo).length;
+  let mtbr = null;
+  if (dates.length >= 2) {
+    const gaps = dates.slice(1).map((d, i) => (d - dates[i]) / 86400000);
+    mtbr = Math.round(gaps.reduce((a, b) => a + b, 0) / gaps.length);
+  }
+  const watch = in12mo >= 3 || (mtbr != null && mtbr < 120);
+  const tile = (label, val) => `<div class="stat" style="padding:10px 14px"><div class="stat-label">${label}</div>
+    <div class="stat-value" style="font-size:1.3rem">${val}</div></div>`;
+  return `<div class="grid" style="grid-template-columns:1fr 1fr;gap:10px">
+      ${tile("Repairs (12mo)", in12mo)}
+      ${tile("Total repairs", dates.length)}
+      ${tile("MTBR", mtbr != null ? mtbr + "d" : "—")}
+      ${tile("Last repair", dates[dates.length - 1].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))}
+    </div>
+    ${watch ? '<div class="badge status on_hold" style="margin-top:12px">⚠ Frequent repairs — consider root-cause review or replacement.</div>'
+      : '<div class="badge status ready" style="margin-top:12px">✓ Within normal repair frequency.</div>'}`;
 }
 
 function printLabel(eq, owner, svg) {
@@ -1056,7 +1081,7 @@ function revenueChart(data) {
 
 async function renderAnalytics() {
   loading();
-  const a = await api.analytics();
+  const [a, reliability] = await Promise.all([api.analytics(), api.reliability()]);
   const stat = (label, val, cls = "", sub = "") =>
     `<div class="stat ${cls}"><div class="stat-label">${label}</div>
      <div class="stat-value">${val}</div><div class="stat-sub">${sub}</div></div>`;
@@ -1088,7 +1113,25 @@ async function renderAnalytics() {
         <div class="card-body">${typeRows.length ? hbars(typeRows) : '<p class="muted">No data.</p>'}</div></div>
       <div class="card"><div class="card-head"><h3>Technician workload</h3></div>
         <div class="card-body">${workloadRows.length ? hbars(workloadRows, { fmt: (v) => v + "h", color: "var(--st-testing)" }) : '<p class="muted">No labor logged.</p>'}</div></div>
-    </div>`;
+    </div>
+    <div class="card" style="margin-top:16px"><div class="card-head"><h3>🔧 Assets needing attention</h3>
+      <span class="muted" style="font-size:.82rem">Reliability — most-repaired equipment</span></div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Asset</th><th>Type</th><th class="text-right">Repairs (12mo)</th><th class="text-right">Total</th><th class="text-right">MTBR</th><th>Last repair</th><th></th></tr></thead>
+        <tbody>${reliability.map((r) => `<tr data-eqid="${r.equipment_id}">
+          <td><strong>${esc(r.tag || r.label)}</strong> ${r.watch ? '<span class="badge status on_hold">⚠ watch</span>' : ""}</td>
+          <td>${TYPE_LABEL[r.equipment_type] || r.equipment_type}</td>
+          <td class="text-right"><strong>${r.repairs_12mo}</strong></td>
+          <td class="text-right muted">${r.repairs_total}</td>
+          <td class="text-right">${r.mtbr_days != null ? r.mtbr_days + "d" : "—"}</td>
+          <td class="muted nowrap">${fmtDate(r.last_repair)}</td>
+          <td class="text-right"><a href="#/equipment/${r.equipment_id}">View →</a></td></tr>`).join("") ||
+        '<tr><td colspan="7" class="muted" style="text-align:center;padding:20px">Not enough repair history yet.</td></tr>'}
+        </tbody></table></div></div>`;
+  els("tr[data-eqid]").forEach((tr) => tr.addEventListener("click", (e) => {
+    if (e.target.tagName === "A") return;
+    location.hash = `#/equipment/${tr.dataset.eqid}`;
+  }));
 }
 
 /* ---------- billing (SaaS subscription) ---------- */

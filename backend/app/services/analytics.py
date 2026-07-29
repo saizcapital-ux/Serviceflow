@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
+    Equipment,
     Invoice,
     InvoiceStatus,
     TimeEntry,
@@ -24,6 +25,54 @@ def _aware(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def asset_reliability(db: Session, organization_id: int, limit: int = 10) -> list[dict]:
+    """Rank assets by repair frequency; compute mean time between repairs (MTBR).
+
+    A simple predictive-maintenance signal: assets repaired often (or with a
+    short interval between repairs) are flagged to watch.
+    """
+    now = datetime.now(timezone.utc)
+    year_ago = now - timedelta(days=365)
+    equipment = db.scalars(
+        select(Equipment).where(Equipment.organization_id == organization_id, Equipment.is_active.is_(True))
+    ).all()
+    wos = db.scalars(
+        select(WorkOrder).where(
+            WorkOrder.organization_id == organization_id, WorkOrder.equipment_id.is_not(None)
+        )
+    ).all()
+
+    by_equip: dict[int, list[datetime]] = defaultdict(list)
+    for w in wos:
+        by_equip[w.equipment_id].append(_aware(w.created_at) or now)
+
+    rows: list[dict] = []
+    for eq in equipment:
+        dates = sorted(by_equip.get(eq.id, []))
+        if not dates:
+            continue
+        count_12mo = sum(1 for d in dates if d >= year_ago)
+        # Mean time between repairs (days) across consecutive repairs.
+        mtbr = None
+        if len(dates) >= 2:
+            gaps = [(dates[i] - dates[i - 1]).days for i in range(1, len(dates))]
+            mtbr = round(sum(gaps) / len(gaps), 1)
+        flag = count_12mo >= 3 or (mtbr is not None and mtbr < 120 and len(dates) >= 2)
+        rows.append({
+            "equipment_id": eq.id,
+            "tag": eq.tag,
+            "equipment_type": eq.equipment_type.value,
+            "label": f"{eq.manufacturer or ''} {eq.model or ''}".strip() or eq.tag or "Asset",
+            "repairs_total": len(dates),
+            "repairs_12mo": count_12mo,
+            "last_repair": max(dates).date().isoformat(),
+            "mtbr_days": mtbr,
+            "watch": flag,
+        })
+    rows.sort(key=lambda r: (r["repairs_12mo"], r["repairs_total"]), reverse=True)
+    return rows[:limit]
 
 
 def summary(db: Session, organization_id: int) -> dict:

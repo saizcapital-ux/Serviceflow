@@ -13,3 +13,8 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 @router.get("/summary")
 def analytics_summary(db: Session = Depends(get_db), user: User = Depends(require_staff)):
     return analytics.summary(db, user.organization_id)
+
+
+@router.get("/reliability")
+def analytics_reliability(db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    return analytics.asset_reliability(db, user.organization_id)
