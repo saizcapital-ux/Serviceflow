@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#0b1f33" />
   <link rel="apple-touch-icon" href="/assets/img/icon-192.png" />
   <title>Serviceflow · Staff</title>
+  <script>(function(){try{var t=localStorage.getItem('sf_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="/assets/css/design-system.css" />
 </head>
 <body>
@@ -30,7 +31,8 @@
       <div class="who">
         <b id="whoName">—</b>
         <span id="whoRole" class="muted"></span>
-        <div style="margin-top:10px"><a id="logout" class="nav-link" style="padding:.4rem .5rem">↩ Sign out</a></div>
+        <div style="margin-top:10px"><a id="themeToggle" class="nav-link" style="padding:.4rem .5rem">🌙 Dark mode</a></div>
+        <div><a id="logout" class="nav-link" style="padding:.4rem .5rem">↩ Sign out</a></div>
       </div>
     </aside>
 

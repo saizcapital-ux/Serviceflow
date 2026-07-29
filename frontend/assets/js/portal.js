@@ -2,7 +2,7 @@
 import { api, auth, openPdf, openAttachment } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
-  STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
+  STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal, initThemeToggle,
 } from "/assets/js/ui.js";
 
 if (!auth.token) location.href = "/login.html";
@@ -17,6 +17,7 @@ function boot() {
   const u = auth.user || {};
   el("#whoName").textContent = u.full_name || u.email;
   el("#logout").addEventListener("click", () => { auth.clear(); location.href = "/login.html"; });
+  initThemeToggle(el("#themeToggle"));
   els(".nav-link[data-route]").forEach((a) =>
     a.addEventListener("click", () => (location.hash = `#/${a.dataset.route}`)));
   window.addEventListener("hashchange", router);

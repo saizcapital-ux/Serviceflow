@@ -2,7 +2,7 @@
 import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText, downloadAuthed } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge, slaBadge,
-  STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
+  STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal, initThemeToggle,
 } from "/assets/js/ui.js";
 
 if (!auth.token) location.href = "/login.html";
@@ -19,6 +19,7 @@ function boot() {
   el("#whoName").textContent = u.full_name || u.email || "—";
   el("#whoRole").textContent = (u.role || "").replace("_", " ");
   el("#logout").addEventListener("click", () => { auth.clear(); location.href = "/login.html"; });
+  initThemeToggle(el("#themeToggle"));
   el("#newWoBtn").addEventListener("click", openNewWorkOrder);
   // Audit log is owner/manager only; Developers is owner only.
   if (!["owner", "manager"].includes(u.role)) el("#navAudit")?.classList.add("hide");

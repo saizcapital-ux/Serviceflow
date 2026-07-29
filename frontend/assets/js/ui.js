@@ -74,6 +74,27 @@ export function toast(msg, kind = "") {
   setTimeout(() => t.remove(), 3800);
 }
 
+/** Read the current theme, defaulting to the OS preference. */
+export function currentTheme() {
+  return localStorage.getItem("sf_theme")
+    || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+}
+
+/** Flip light/dark, persist, and update the button label if given. */
+export function toggleTheme(btn) {
+  const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("sf_theme", next);
+  if (btn) btn.textContent = next === "dark" ? "☀️ Light mode" : "🌙 Dark mode";
+}
+
+/** Wire a theme-toggle button and set its initial label. */
+export function initThemeToggle(btn) {
+  if (!btn) return;
+  btn.textContent = currentTheme() === "dark" ? "☀️ Light mode" : "🌙 Dark mode";
+  btn.addEventListener("click", () => toggleTheme(btn));
+}
+
 export function modal(html) {
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
