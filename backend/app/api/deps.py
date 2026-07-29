@@ -1,14 +1,16 @@
 """Shared API dependencies: auth, current user, RBAC guards, tenant scoping."""
 from collections.abc import Callable
+from datetime import datetime, timezone
 
 import jwt
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import decode_access_token
-from app.models import User, UserRole
+from app.core.security import decode_access_token, hash_api_key
+from app.models import ApiKey, User, UserRole
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
@@ -58,3 +60,24 @@ def require_staff(user: User = Depends(get_current_user)) -> User:
     if user.role == UserRole.customer:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Staff access only.")
     return user
+
+
+def get_api_key_org(
+    x_api_key: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> int:
+    """Authenticate a machine client via `X-API-Key` and return its organization id."""
+    if not x_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing API key.",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    key = db.scalar(
+        select(ApiKey).where(ApiKey.hashed_key == hash_api_key(x_api_key), ApiKey.is_active.is_(True))
+    )
+    if not key:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or revoked API key.")
+    key.last_used_at = datetime.now(timezone.utc)
+    db.commit()
+    return key.organization_id

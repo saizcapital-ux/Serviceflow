@@ -208,6 +208,55 @@ def test_consume_part_decrements_stock(client, staff_headers):
     assert bad.status_code == 409
 
 
+def test_api_key_auth_flow(client, staff_headers):
+    created = client.post("/api/developer/api-keys", headers=staff_headers, json={"name": "Test integration"})
+    assert created.status_code == 201
+    body = created.json()
+    full = body["key"]
+    assert full.startswith("sf_") and body["prefix"] in full
+
+    # The full key is not returned by the list endpoint (only prefix)
+    listed = client.get("/api/developer/api-keys", headers=staff_headers).json()
+    assert all("key" not in k for k in listed)
+
+    # Use the key against the v1 integration API
+    ok = client.get("/api/v1/work-orders", headers={"X-API-Key": full})
+    assert ok.status_code == 200 and isinstance(ok.json(), list)
+
+    # A bad key is rejected; a missing key is rejected
+    assert client.get("/api/v1/work-orders", headers={"X-API-Key": "sf_bogus"}).status_code == 401
+    assert client.get("/api/v1/work-orders").status_code == 401
+
+    # Revoke → the key stops working
+    client.delete(f"/api/developer/api-keys/{body['id']}", headers=staff_headers)
+    assert client.get("/api/v1/work-orders", headers={"X-API-Key": full}).status_code == 401
+
+
+def test_api_keys_owner_only(client):
+    tok = client.post("/api/auth/login", json={"email": "writer@apexrepair.com", "password": "Password123"}).json()["access_token"]
+    h = {"Authorization": f"Bearer {tok}"}
+    assert client.get("/api/developer/api-keys", headers=h).status_code == 403
+
+
+def test_webhook_delivery_recorded(client, staff_headers):
+    # Point at a closed port so delivery fails fast and is recorded.
+    hook = client.post("/api/developer/webhooks", headers=staff_headers,
+                       json={"url": "http://127.0.0.1:9/hook", "events": ["*"]}).json()
+    # Explicit test-fire records a delivery
+    d = client.post(f"/api/developer/webhooks/{hook['id']}/test", headers=staff_headers).json()
+    assert d["success"] is False and d["error"]
+
+    # A real event (status change) also dispatches + records a delivery
+    cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]
+    wo = client.post("/api/work-orders", headers=staff_headers, json={"customer_id": cid, "title": "Hook test"}).json()
+    client.post(f"/api/work-orders/{wo['id']}/status", headers=staff_headers, json={"status": "inspection"})
+    deliveries = client.get(f"/api/developer/webhooks/{hook['id']}/deliveries", headers=staff_headers).json()
+    assert any(dl["event"] == "work_order.status_changed" for dl in deliveries)
+
+    # Clean up so the webhook doesn't affect other tests' status changes
+    client.delete(f"/api/developer/webhooks/{hook['id']}", headers=staff_headers)
+
+
 def test_audit_log_records_actions(client, staff_headers):
     # Login (staff_headers fixture) + creating a WO should both be audited.
     cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]

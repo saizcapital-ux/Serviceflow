@@ -18,8 +18,9 @@ function boot() {
   el("#whoRole").textContent = (u.role || "").replace("_", " ");
   el("#logout").addEventListener("click", () => { auth.clear(); location.href = "/login.html"; });
   el("#newWoBtn").addEventListener("click", openNewWorkOrder);
-  // Audit log is owner/manager only.
+  // Audit log is owner/manager only; Developers is owner only.
   if (!["owner", "manager"].includes(u.role)) el("#navAudit")?.classList.add("hide");
+  if (u.role !== "owner") el("#navDev")?.classList.add("hide");
   els(".nav-link[data-route]").forEach((a) =>
     a.addEventListener("click", () => (location.hash = `#/${a.dataset.route}`)));
   window.addEventListener("hashchange", router);
@@ -50,6 +51,7 @@ async function router() {
     if (route === "invoices") return renderInvoices();
     if (route === "notifications") return renderNotifications();
     if (route === "audit") return renderAudit();
+    if (route === "developer") return renderDeveloper();
     if (route === "billing") return renderBilling();
     if (route === "analytics") return renderAnalytics();
     renderDashboard();
@@ -1074,6 +1076,123 @@ async function renderBilling() {
     try { await api.cancelSubscription(); toast("Subscription canceled", ""); renderBilling(); }
     catch (ex) { toast(ex.message, "err"); }
   });
+}
+
+/* ---------- developer (API keys + webhooks) ---------- */
+const WEBHOOK_EVENTS = ["work_order.status_changed", "invoice.paid"];
+
+async function renderDeveloper() {
+  loading();
+  const [keys, hooks] = await Promise.all([api.apiKeys(), api.webhooks()]);
+  view.innerHTML = `
+    <div class="page-title"><h1>Developers</h1><span class="muted">Programmatic access &amp; webhooks</span></div>
+    <div class="card" style="margin-bottom:20px"><div class="card-head"><h3>API keys</h3>
+      <button class="btn btn-primary btn-sm" id="newKey">+ New key</button></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px">Authenticate integration requests with
+          <span class="mono">X-API-Key: sf_…</span> against <span class="mono">/api/v1/*</span>.</p>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Name</th><th>Key</th><th>Last used</th><th>Status</th><th></th></tr></thead>
+          <tbody>${keys.map((k) => `<tr data-nostyle>
+            <td><strong>${esc(k.name)}</strong></td>
+            <td class="mono">${esc(k.prefix)}…</td>
+            <td class="muted nowrap">${k.last_used_at ? fmtDateTime(k.last_used_at) : "never"}</td>
+            <td>${k.is_active ? '<span class="badge status ready">active</span>' : '<span class="badge status cancelled">revoked</span>'}</td>
+            <td class="text-right">${k.is_active ? `<button class="btn btn-danger btn-sm" data-revoke="${k.id}">Revoke</button>` : ""}</td></tr>`).join("") ||
+          '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">No API keys yet.</td></tr>'}
+          </tbody></table></div></div></div>
+
+    <div class="card"><div class="card-head"><h3>Webhooks</h3>
+      <button class="btn btn-primary btn-sm" id="newHook">+ Add webhook</button></div>
+      <div class="card-body stack">
+        <p class="muted" style="font-size:.85rem">Serviceflow POSTs a signed JSON payload
+          (<span class="mono">X-Serviceflow-Signature: sha256=…</span>) to your endpoint on each subscribed event.</p>
+        ${hooks.map((h) => `<div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body">
+          <div class="spread"><div><strong class="mono" style="font-size:.86rem">${esc(h.url)}</strong>
+            <div class="muted" style="font-size:.8rem">${(h.events || []).map((e) => esc(e)).join(", ")}</div></div>
+            <div class="row">
+              <button class="btn btn-ghost btn-sm" data-test="${h.id}">Send test</button>
+              <button class="btn btn-ghost btn-sm" data-deliv="${h.id}">Deliveries</button>
+              <button class="btn btn-danger btn-sm" data-delhook="${h.id}">✕</button></div></div>
+          <div class="deliveries hide" data-deliv-box="${h.id}" style="margin-top:10px"></div></div></div>`).join("") ||
+        '<p class="muted">No webhooks yet.</p>'}
+      </div></div>`;
+
+  el("#newKey").addEventListener("click", openNewKey);
+  el("#newHook").addEventListener("click", openNewWebhook);
+  els("[data-revoke]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Revoke this API key? Integrations using it will stop working.")) return;
+    try { await api.revokeApiKey(b.dataset.revoke); toast("Key revoked", ""); renderDeveloper(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+  els("[data-delhook]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Delete this webhook?")) return;
+    try { await api.deleteWebhook(b.dataset.delhook); toast("Webhook deleted", ""); renderDeveloper(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+  els("[data-test]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true; b.textContent = "Sending…";
+    try {
+      const d = await api.testWebhook(b.dataset.test);
+      toast(d.success ? `Delivered (HTTP ${d.status_code})` : `Failed: ${d.error || "unreachable"}`, d.success ? "ok" : "err");
+    } catch (e) { toast(e.message, "err"); }
+    b.disabled = false; b.textContent = "Send test";
+  }));
+  els("[data-deliv]").forEach((b) => b.addEventListener("click", async () => {
+    const box = el(`[data-deliv-box="${b.dataset.deliv}"]`);
+    if (!box.classList.contains("hide")) { box.classList.add("hide"); return; }
+    box.classList.remove("hide"); box.innerHTML = '<p class="muted">Loading…</p>';
+    try {
+      const list = await api.webhookDeliveries(b.dataset.deliv);
+      box.innerHTML = list.length ? `<table class="data"><thead><tr><th>When</th><th>Event</th><th>Result</th></tr></thead>
+        <tbody>${list.map((d) => `<tr data-nostyle><td class="muted nowrap">${fmtDateTime(d.created_at)}</td><td class="mono">${esc(d.event)}</td>
+          <td>${d.success ? `<span class="badge status ready">HTTP ${d.status_code}</span>` : `<span class="badge status cancelled">${esc(d.error || "failed")}</span>`}</td></tr>`).join("")}</tbody></table>`
+        : '<p class="muted">No deliveries yet.</p>';
+    } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  }));
+}
+
+function openNewKey() {
+  const m = modal(`<div class="card-head"><h3>Create API key</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Name / purpose</span><input id="kn" placeholder="e.g. ERP integration" /></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="kcx">Cancel</button>
+        <button class="btn btn-primary" id="kok">Create</button></div></div>`);
+  el("#kcx", m.root).onclick = m.close;
+  el("#kok", m.root).onclick = async () => {
+    const name = el("#kn", m.root).value.trim();
+    if (!name) return toast("Name is required", "err");
+    try {
+      const created = await api.createApiKey(name);
+      m.close();
+      modal(`<div class="card-head"><h3>Copy your API key</h3></div>
+        <div class="card-body stack">
+          <div class="badge status on_hold" style="align-self:flex-start">⚠ Shown only once — store it now.</div>
+          <input readonly value="${esc(created.key)}" class="mono" onclick="this.select()" style="font-size:.82rem" />
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-primary" onclick="this.closest('.modal-backdrop').remove()">Done</button></div>
+        </div>`);
+      renderDeveloper();
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
+function openNewWebhook() {
+  const m = modal(`<div class="card-head"><h3>Add webhook</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Endpoint URL</span><input id="wu" placeholder="https://example.com/hooks/serviceflow" /></label>
+      <div class="field"><span>Events</span>
+        <label class="row" style="font-size:.9rem"><input type="checkbox" class="wev" value="*" checked style="width:auto"> All events</label>
+        ${WEBHOOK_EVENTS.map((e) => `<label class="row" style="font-size:.9rem"><input type="checkbox" class="wev" value="${e}" style="width:auto"> ${e}</label>`).join("")}</div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="wcx">Cancel</button>
+        <button class="btn btn-primary" id="wok">Add webhook</button></div></div>`);
+  el("#wcx", m.root).onclick = m.close;
+  el("#wok", m.root).onclick = async () => {
+    const url = el("#wu", m.root).value.trim();
+    if (!/^https?:\/\//.test(url)) return toast("Enter a valid URL", "err");
+    const events = els(".wev", m.root).filter((c) => c.checked).map((c) => c.value);
+    try { await api.createWebhook(url, events.length ? events : ["*"]); m.close(); toast("Webhook added", "ok"); renderDeveloper(); }
+    catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 /* ---------- audit log ---------- */

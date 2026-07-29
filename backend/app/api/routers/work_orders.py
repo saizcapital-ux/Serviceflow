@@ -44,7 +44,7 @@ from app.schemas import (
     WorkOrderSummary,
     WorkOrderUpdate,
 )
-from app.services import audit, notifications, workflow
+from app.services import audit, notifications, webhooks, workflow
 
 router = APIRouter(prefix="/api/work-orders", tags=["work-orders"])
 
@@ -164,6 +164,8 @@ def change_status(
     audit.record(db, organization_id=user.organization_id, actor=user, action="work_order.status_changed",
                  summary=f"{wo.number} → {payload.status.value.replace('_', ' ')}",
                  entity_type="work_order", entity_id=wo.id, meta={"status": payload.status.value})
+    webhooks.dispatch(db, user.organization_id, "work_order.status_changed",
+                      {"id": wo.id, "number": wo.number, "status": payload.status.value})
     db.commit()
     return _load_detail(db, wo_id, user.organization_id)
 

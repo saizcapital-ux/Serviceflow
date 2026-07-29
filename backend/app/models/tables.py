@@ -340,6 +340,49 @@ class PartUsage(Base):
     part: Mapped[Part] = relationship()
 
 
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    prefix: Mapped[str] = mapped_column(String(16), index=True)   # shown in the UI
+    hashed_key: Mapped[str] = mapped_column(String(80), index=True)  # sha256 hex
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    secret: Mapped[str] = mapped_column(String(80))  # used to HMAC-sign payloads
+    events: Mapped[list] = mapped_column(JSON, default=list)  # e.g. ["invoice.paid"] or ["*"]
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    deliveries: Mapped[list[WebhookDelivery]] = relationship(
+        back_populates="webhook", cascade="all, delete-orphan", order_by="WebhookDelivery.created_at.desc()"
+    )
+
+
+class WebhookDelivery(Base):
+    __tablename__ = "webhook_deliveries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    webhook_id: Mapped[int] = mapped_column(ForeignKey("webhooks.id"), index=True)
+    event: Mapped[str] = mapped_column(String(60))
+    status_code: Mapped[int | None] = mapped_column(Integer)
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    webhook: Mapped[Webhook] = relationship(back_populates="deliveries")
+
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 

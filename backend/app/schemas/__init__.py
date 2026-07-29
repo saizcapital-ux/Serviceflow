@@ -298,6 +298,45 @@ class ApplyTemplate(BaseModel):
     template_id: int
 
 
+class ApiKeyOut(ORMModel):
+    id: int
+    name: str
+    prefix: str
+    is_active: bool
+    last_used_at: datetime | None = None
+    created_at: datetime
+
+
+class ApiKeyCreate(BaseModel):
+    name: str
+
+
+class ApiKeyCreated(ApiKeyOut):
+    key: str  # full key, shown only once
+
+
+class WebhookCreate(BaseModel):
+    url: str
+    events: list[str] = ["*"]
+
+
+class WebhookDeliveryOut(ORMModel):
+    id: int
+    event: str
+    status_code: int | None = None
+    success: bool
+    error: str | None = None
+    created_at: datetime
+
+
+class WebhookOut(ORMModel):
+    id: int
+    url: str
+    events: list[str]
+    is_active: bool
+    created_at: datetime
+
+
 class AuditLogOut(ORMModel):
     id: int
     actor_label: str

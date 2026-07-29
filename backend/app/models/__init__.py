@@ -13,6 +13,7 @@ from app.models.enums import (
     WorkOrderStatus,
 )
 from app.models.tables import (
+    ApiKey,
     Attachment,
     AuditLog,
     ChecklistItem,
@@ -31,6 +32,8 @@ from app.models.tables import (
     QuoteLine,
     TimeEntry,
     User,
+    Webhook,
+    WebhookDelivery,
     WorkOrder,
     WorkOrderEvent,
 )
@@ -47,6 +50,7 @@ __all__ = [
     "ServiceType",
     "UserRole",
     "WorkOrderStatus",
+    "ApiKey",
     "Attachment",
     "AuditLog",
     "ChecklistItem",
@@ -65,6 +69,8 @@ __all__ = [
     "QuoteLine",
     "TimeEntry",
     "User",
+    "Webhook",
+    "WebhookDelivery",
     "WorkOrder",
     "WorkOrderEvent",
 ]

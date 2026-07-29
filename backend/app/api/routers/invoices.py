@@ -19,7 +19,7 @@ from app.models import (
     WorkOrder,
 )
 from app.schemas import InvoiceCreate, InvoiceOut, MarkPaid
-from app.services import audit, billing
+from app.services import audit, billing, webhooks
 from app.services.pdf import render_invoice_pdf
 
 router = APIRouter(prefix="/api", tags=["invoices"])
@@ -75,6 +75,9 @@ def mark_paid(invoice_id: int, payload: MarkPaid, db: Session = Depends(get_db),
                  action="invoice.paid" if payload.paid else "invoice.unpaid",
                  summary=f"Marked invoice {inv.number} {'paid' if payload.paid else 'unpaid'} (${inv.total:,.2f})",
                  entity_type="invoice", entity_id=inv.id)
+    if payload.paid:
+        webhooks.dispatch(db, user.organization_id, "invoice.paid",
+                          {"id": inv.id, "number": inv.number, "total": inv.total, "customer_id": inv.customer_id})
     db.commit()
     return _load_invoice(db, invoice_id, user.organization_id)
 

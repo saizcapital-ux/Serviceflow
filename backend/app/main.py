@@ -11,6 +11,8 @@ from app.api.routers import (
     checklists,
     customers,
     dashboard,
+    developer,
+    integration,
     invoices,
     notifications,
     parts,
@@ -46,6 +48,8 @@ app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(analytics.router)
 app.include_router(audit.router)
+app.include_router(developer.router)
+app.include_router(integration.router)
 app.include_router(billing.router)
 app.include_router(team.router)
 app.include_router(customers.router)

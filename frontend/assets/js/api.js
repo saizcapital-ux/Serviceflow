@@ -77,6 +77,15 @@ export const api = {
   subscription: () => request("/api/billing/subscription"),
   checkout: (planId) => request("/api/billing/checkout", { method: "POST", body: { plan_id: planId } }),
   cancelSubscription: () => request("/api/billing/cancel", { method: "POST" }),
+  // developer: API keys + webhooks
+  apiKeys: () => request("/api/developer/api-keys"),
+  createApiKey: (name) => request("/api/developer/api-keys", { method: "POST", body: { name } }),
+  revokeApiKey: (id) => request(`/api/developer/api-keys/${id}`, { method: "DELETE" }),
+  webhooks: () => request("/api/developer/webhooks"),
+  createWebhook: (url, events) => request("/api/developer/webhooks", { method: "POST", body: { url, events } }),
+  deleteWebhook: (id) => request(`/api/developer/webhooks/${id}`, { method: "DELETE" }),
+  webhookDeliveries: (id) => request(`/api/developer/webhooks/${id}/deliveries`),
+  testWebhook: (id) => request(`/api/developer/webhooks/${id}/test`, { method: "POST" }),
   // audit
   audit: (action) => request(`/api/audit${action ? `?action=${encodeURIComponent(action)}` : ""}`),
   // notifications
