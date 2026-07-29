@@ -10,6 +10,8 @@ if (auth.user && auth.user.role === "customer") location.href = "/portal/";
 
 const view = el("#view");
 let customersCache = null;
+let locationsCache = null;
+let currentLocation = localStorage.getItem("sf_loc") || ""; // "" = all locations
 
 /* ---------- boot ---------- */
 function boot() {
@@ -24,8 +26,58 @@ function boot() {
   els(".nav-link[data-route]").forEach((a) =>
     a.addEventListener("click", () => (location.hash = `#/${a.dataset.route}`)));
   window.addEventListener("hashchange", router);
+  initLocationSwitcher();
   if (!location.hash) location.hash = "#/dashboard";
   else router();
+}
+
+async function initLocationSwitcher() {
+  const sel = el("#locSwitcher");
+  if (!sel) return;
+  try {
+    locationsCache = await api.locations();
+  } catch { return; }
+  if (!locationsCache.length) return; // single-location org: keep switcher hidden
+  const canManage = ["owner", "manager"].includes((auth.user || {}).role);
+  sel.innerHTML = `<option value="">📍 All locations</option>`
+    + locationsCache.map((l) => `<option value="${l.id}" ${String(l.id) === currentLocation ? "selected" : ""}>${esc(l.name)}</option>`).join("")
+    + (canManage ? `<option value="__manage">➕ Manage locations…</option>` : "");
+  sel.classList.remove("hide");
+  sel.onchange = () => {
+    if (sel.value === "__manage") { sel.value = currentLocation; openManageLocations(); return; }
+    currentLocation = sel.value;
+    localStorage.setItem("sf_loc", currentLocation);
+    router();
+  };
+}
+
+/** Locations that filter by branch pass this through to the API. */
+const locParam = () => (currentLocation ? { location_id: currentLocation } : {});
+
+function openManageLocations() {
+  const rows = (locationsCache || []).map((l) =>
+    `<div class="spread" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <span><strong>${esc(l.name)}</strong> <span class="mono muted">${esc(l.code)}</span></span>
+      <span class="muted" style="font-size:.82rem">${esc(l.address || "")}</span></div>`).join("");
+  const m = modal(`<div class="card-head"><h3>Locations</h3></div>
+    <div class="card-body stack">
+      <div>${rows || '<p class="muted">No locations yet.</p>'}</div>
+      <div class="divider"></div>
+      <div class="row"><input id="lname" placeholder="Name (e.g. Dallas Branch)" />
+        <input id="lcode" placeholder="Code" style="max-width:110px" /></div>
+      <input id="laddr" placeholder="Address (optional)" />
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="lcx">Close</button>
+        <button class="btn btn-primary" id="lok">Add location</button></div></div>`);
+  el("#lcx", m.root).onclick = m.close;
+  el("#lok", m.root).onclick = async () => {
+    const name = el("#lname", m.root).value.trim(), code = el("#lcode", m.root).value.trim();
+    if (!name || !code) return toast("Name and code are required", "err");
+    try {
+      await api.createLocation({ name, code, address: el("#laddr", m.root).value.trim() || null });
+      locationsCache = null; m.close(); toast("Location added", "ok");
+      await initLocationSwitcher();
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function setActive(route) {
@@ -63,7 +115,7 @@ const loading = () => (view.innerHTML = `<div class="empty"><div class="big">◍
 /* ---------- dashboard ---------- */
 async function renderDashboard() {
   loading();
-  const d = await api.dashboard();
+  const d = await api.dashboard(currentLocation || null);
   const stat = (label, val, cls = "", sub = "") =>
     `<div class="stat ${cls}"><div class="stat-label">${label}</div>
      <div class="stat-value">${val}</div><div class="stat-sub">${sub}</div></div>`;
@@ -113,7 +165,7 @@ function emptyRow(cols) { return `<tr><td colspan="${cols}" class="muted" style=
 
 async function renderWorkOrders(params = {}, title = "Work Orders") {
   loading();
-  const list = await api.workOrders(params);
+  const list = await api.workOrders({ ...params, ...locParam() });
   const filterBar = `
     <div class="row wrap" style="margin-bottom:16px">
       ${["", "intake", "inspection", "quote_pending", "approved", "in_repair", "testing", "ready"]
@@ -621,6 +673,9 @@ async function openNewWorkOrder() {
           <option value="normal">Normal</option><option value="low">Low</option>
           <option value="high">High</option><option value="rush">Rush</option></select></label>
       </div>
+      ${(locationsCache && locationsCache.length) ? `<label class="field"><span>Location</span><select id="wloc">
+        <option value="">— unassigned —</option>
+        ${locationsCache.map((l) => `<option value="${l.id}" ${String(l.id) === currentLocation ? "selected" : ""}>${esc(l.name)}</option>`).join("")}</select></label>` : ""}
       <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="wcx">Cancel</button>
         <button class="btn btn-primary" id="wok">Create work order</button></div></div>`);
   const eqSel = el("#we", m.root);
@@ -641,6 +696,7 @@ async function openNewWorkOrder() {
         customer_id, equipment_id: +el("#we", m.root).value || null, title,
         problem_description: el("#wp", m.root).value.trim() || null,
         service_type: el("#ws", m.root).value, priority: el("#wpr", m.root).value,
+        location_id: +(el("#wloc", m.root)?.value) || null,
       });
       m.close(); toast(`Created ${wo.number}`, "ok"); location.hash = `#/workorders/${wo.id}`;
     } catch (ex) { toast(ex.message, "err"); }
@@ -666,7 +722,7 @@ async function renderCustomers() {
 /* ---------- equipment ---------- */
 async function renderEquipment() {
   loading();
-  const list = await api.equipment();
+  const list = await api.equipment(null, currentLocation || null);
   const cust = customersCache || (customersCache = await api.customers());
   const byId = Object.fromEntries(cust.map((c) => [c.id, c.name]));
   view.innerHTML = `
@@ -791,7 +847,7 @@ let techCache = null;
 async function renderDispatch() {
   loading();
   const [list, cust, techs] = await Promise.all([
-    api.workOrders({ service_type: "field_service" }),
+    api.workOrders({ service_type: "field_service", ...locParam() }),
     customersCache || api.customers(),
     techCache || api.users("technician"),
   ]);

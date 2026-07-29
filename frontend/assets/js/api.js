@@ -35,11 +35,20 @@ export const api = {
   login: (email, password) => request("/api/auth/login", { method: "POST", body: { email, password }, auth: false }),
   me: () => request("/api/auth/me"),
   // dashboard
-  dashboard: () => request("/api/dashboard"),
+  dashboard: (locationId) => request(`/api/dashboard${locationId ? `?location_id=${locationId}` : ""}`),
+  // locations
+  locations: () => request("/api/locations"),
+  createLocation: (b) => request("/api/locations", { method: "POST", body: b }),
   // customers & equipment
   customers: (q) => request(`/api/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`),
   createCustomer: (b) => request("/api/customers", { method: "POST", body: b }),
-  equipment: (customerId) => request(`/api/equipment${customerId ? `?customer_id=${customerId}` : ""}`),
+  equipment: (customerId, locationId) => {
+    const qs = new URLSearchParams();
+    if (customerId) qs.set("customer_id", customerId);
+    if (locationId) qs.set("location_id", locationId);
+    const s = qs.toString();
+    return request(`/api/equipment${s ? `?${s}` : ""}`);
+  },
   equipmentOne: (id) => request(`/api/equipment/${id}`),
   createEquipment: (b) => request("/api/equipment", { method: "POST", body: b }),
   // work orders (staff)

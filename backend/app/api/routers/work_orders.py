@@ -77,6 +77,7 @@ def list_work_orders(
     service_type: str | None = None,
     customer_id: int | None = None,
     equipment_id: int | None = None,
+    location_id: int | None = None,
     open_only: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
@@ -90,6 +91,8 @@ def list_work_orders(
         stmt = stmt.where(WorkOrder.customer_id == customer_id)
     if equipment_id:
         stmt = stmt.where(WorkOrder.equipment_id == equipment_id)
+    if location_id:
+        stmt = stmt.where(WorkOrder.location_id == location_id)
     if service_type:
         stmt = stmt.where(WorkOrder.service_type == service_type)
     return db.scalars(stmt.order_by(WorkOrder.created_at.desc())).all()

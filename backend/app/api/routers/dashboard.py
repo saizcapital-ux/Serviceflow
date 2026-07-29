@@ -13,22 +13,23 @@ router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("", response_model=DashboardStats)
-def dashboard(db: Session = Depends(get_db), user: User = Depends(require_staff)):
+def dashboard(location_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(require_staff)):
     org = user.organization_id
-    base = select(func.count()).select_from(WorkOrder).where(WorkOrder.organization_id == org)
+    loc = (WorkOrder.location_id == location_id,) if location_id else ()
+    base = select(func.count()).select_from(WorkOrder).where(WorkOrder.organization_id == org, *loc)
 
     def count(*conditions) -> int:
         return db.scalar(base.where(*conditions)) or 0
 
     by_status_rows = db.execute(
         select(WorkOrder.status, func.count())
-        .where(WorkOrder.organization_id == org)
+        .where(WorkOrder.organization_id == org, *loc)
         .group_by(WorkOrder.status)
     ).all()
 
     recent = db.scalars(
         select(WorkOrder)
-        .where(WorkOrder.organization_id == org)
+        .where(WorkOrder.organization_id == org, *loc)
         .order_by(WorkOrder.updated_at.desc())
         .limit(8)
     ).all()

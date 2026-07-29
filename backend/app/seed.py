@@ -25,6 +25,7 @@ from app.models import (
     Invoice,
     InvoiceLine,
     InvoiceStatus,
+    Location,
     Notification,
     NotificationChannel,
     NotificationStatus,
@@ -64,6 +65,14 @@ def seed() -> None:
         db.add(org)
         db.flush()
 
+        # ---- Locations (branches) ----
+        loc_main = Location(organization_id=org.id, name="Houston Main Shop", code="HOU",
+                            address="1200 Industrial Blvd, Houston, TX")
+        loc_field = Location(organization_id=org.id, name="Beaumont Branch", code="BMT",
+                             address="45 Refinery Row, Beaumont, TX")
+        db.add_all([loc_main, loc_field])
+        db.flush()
+
         # ---- Staff users ----
         admin = User(organization_id=org.id, email="admin@apexrepair.com", hashed_password=PW,
                      full_name="Dana Okafor", role=UserRole.owner)
@@ -99,22 +108,22 @@ def seed() -> None:
                     full_name="Sam Whitfield", role=UserRole.customer, customer_id=acme.id))
 
         # ---- Equipment ----
-        motor = Equipment(organization_id=org.id, customer_id=acme.id, tag="MTR-4471",
+        motor = Equipment(organization_id=org.id, customer_id=acme.id, location_id=loc_main.id, tag="MTR-4471",
                           equipment_type=EquipmentType.motor, manufacturer="Siemens", model="1LE2",
                           serial_number="SN-MTR-88213",
                           nameplate_data={"hp": 250, "rpm": 1785, "voltage": "460V", "frame": "449T"},
                           location="Cooling Tower Bay 2")
-        limitorque = Equipment(organization_id=org.id, customer_id=acme.id, tag="VLV-0092",
+        limitorque = Equipment(organization_id=org.id, customer_id=acme.id, location_id=loc_main.id, tag="VLV-0092",
                                equipment_type=EquipmentType.actuator, manufacturer="Limitorque",
                                model="SMB-000", serial_number="SN-LMT-33019",
                                nameplate_data={"torque_ft_lb": 500, "valve_size_in": 12, "class": "600#"},
                                location="Feedwater Header")
-        pump = Equipment(organization_id=org.id, customer_id=gulf.id, tag="PMP-1180",
+        pump = Equipment(organization_id=org.id, customer_id=gulf.id, location_id=loc_field.id, tag="PMP-1180",
                          equipment_type=EquipmentType.pump, manufacturer="Goulds", model="3196",
                          serial_number="SN-PMP-55127",
                          nameplate_data={"flow_gpm": 800, "head_ft": 220, "seal": "double mechanical"},
                          location="Unit 5 Transfer")
-        blower = Equipment(organization_id=org.id, customer_id=gulf.id, tag="BLW-2030",
+        blower = Equipment(organization_id=org.id, customer_id=gulf.id, location_id=loc_field.id, tag="BLW-2030",
                            equipment_type=EquipmentType.blower, manufacturer="Gardner Denver",
                            model="RBDH", serial_number="SN-BLW-77410",
                            nameplate_data={"cfm": 1200, "psi": 12}, location="Wastewater Aeration")
@@ -127,7 +136,9 @@ def seed() -> None:
                     priority, assigned=None, promised_offset=7):
             wo = WorkOrder(
                 organization_id=org.id, number=number, customer_id=customer.id,
-                equipment_id=equipment.id if equipment else None, service_type=service_type,
+                equipment_id=equipment.id if equipment else None,
+                location_id=equipment.location_id if equipment else loc_main.id,
+                service_type=service_type,
                 priority=priority, status=status_path[-1], title=title, problem_description=problem,
                 assigned_to=assigned.id if assigned else None,
                 promised_date=today + timedelta(days=promised_offset),

@@ -46,6 +46,20 @@ class UserOut(ORMModel):
 
 
 # ---------- Customers ----------
+class LocationCreate(BaseModel):
+    name: str
+    code: str
+    address: str | None = None
+
+
+class LocationOut(ORMModel):
+    id: int
+    name: str
+    code: str
+    address: str | None = None
+    is_active: bool
+
+
 class ContactOut(ORMModel):
     id: int
     name: str
@@ -78,6 +92,7 @@ class CustomerOut(ORMModel, CustomerBase):
 # ---------- Equipment ----------
 class EquipmentBase(BaseModel):
     customer_id: int
+    location_id: int | None = None
     tag: str | None = None
     equipment_type: EquipmentType = EquipmentType.other
     manufacturer: str | None = None
@@ -100,6 +115,7 @@ class EquipmentOut(ORMModel, EquipmentBase):
 class WorkOrderCreate(BaseModel):
     customer_id: int
     equipment_id: int | None = None
+    location_id: int | None = None
     service_type: ServiceType = ServiceType.shop_repair
     priority: Priority = Priority.normal
     title: str
@@ -115,6 +131,7 @@ class WorkOrderUpdate(BaseModel):
     title: str | None = None
     problem_description: str | None = None
     po_number: str | None = None
+    location_id: int | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     promised_date: date | None = None
@@ -435,6 +452,7 @@ class WorkOrderSummary(ORMModel):
     service_type: ServiceType
     customer_id: int
     equipment_id: int | None = None
+    location_id: int | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     promised_date: date | None = None

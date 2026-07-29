@@ -64,6 +64,7 @@ def get_customer(customer_id: int, db: Session = Depends(get_db), user: User = D
 @router.get("/equipment", response_model=list[EquipmentOut])
 def list_equipment(
     customer_id: int | None = None,
+    location_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
 ):
@@ -72,6 +73,8 @@ def list_equipment(
     )
     if customer_id:
         stmt = stmt.where(Equipment.customer_id == customer_id)
+    if location_id:
+        stmt = stmt.where(Equipment.location_id == location_id)
     return db.scalars(stmt.order_by(Equipment.created_at.desc())).all()
 
 

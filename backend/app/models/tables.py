@@ -77,6 +77,19 @@ class User(Base):
     organization: Mapped[Organization] = relationship(back_populates="users")
 
 
+class Location(Base):
+    __tablename__ = "locations"
+    __table_args__ = (UniqueConstraint("organization_id", "code", name="uq_location_org_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    address: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
@@ -119,6 +132,7 @@ class Equipment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"), index=True)
     tag: Mapped[str | None] = mapped_column(String(60))
     equipment_type: Mapped[EquipmentType] = mapped_column(Enum(EquipmentType), default=EquipmentType.other)
     manufacturer: Mapped[str | None] = mapped_column(String(120))
@@ -143,6 +157,7 @@ class WorkOrder(Base):
     number: Mapped[str] = mapped_column(String(40), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     equipment_id: Mapped[int | None] = mapped_column(ForeignKey("equipment.id"), index=True)
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"), index=True)
     service_type: Mapped[ServiceType] = mapped_column(Enum(ServiceType), default=ServiceType.shop_repair)
     priority: Mapped[Priority] = mapped_column(Enum(Priority), default=Priority.normal)
     status: Mapped[WorkOrderStatus] = mapped_column(

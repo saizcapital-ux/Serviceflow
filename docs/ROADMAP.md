@@ -44,13 +44,19 @@ A pragmatic path from the current MVP to a sellable, scalable SaaS.
 - Offline **job capture** (queue writes while offline, sync on reconnect)
 - Fully configurable statuses per shop
 
-## 🏔 v3 — "Scale & enterprise"
+## ✅ v3 — "Scale & enterprise" (delivered)
 
-- Multi-location / multi-warehouse tenants
-- SSO (SAML/OIDC), audit logs, granular permissions
-- API keys & webhooks for customer ERP integration
-- Schema-per-tenant option for large accounts
-- SLA tracking and predictive maintenance insights
+- ✅ Org-wide **audit log** (who did what, across the workspace)
+- ✅ **API keys** (X-API-Key) + public integration API (`/api/v1/*`)
+- ✅ Outbound **webhooks** (HMAC-signed, delivery log) on key events
+- ✅ **Multi-location** tenants: branches, per-location work orders/equipment,
+  and a dashboard/list location filter
+
+### v3 follow-ups still open
+- SSO (SAML/OIDC) and granular per-permission roles
+- Schema-per-tenant option for large enterprise accounts
+- SLA tracking and predictive-maintenance insights
+- Background delivery queue with retries/backoff for webhooks
 
 ## Engineering hardening (continuous)
 

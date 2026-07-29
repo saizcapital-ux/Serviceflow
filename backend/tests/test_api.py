@@ -208,6 +208,37 @@ def test_consume_part_decrements_stock(client, staff_headers):
     assert bad.status_code == 409
 
 
+def test_locations_and_filtering(client, staff_headers):
+    locs = client.get("/api/locations", headers=staff_headers).json()
+    codes = {l["code"] for l in locs}
+    assert {"HOU", "BMT"} <= codes
+    hou = next(l for l in locs if l["code"] == "HOU")
+
+    # Work orders filter by location
+    hou_wos = client.get(f"/api/work-orders?location_id={hou['id']}", headers=staff_headers).json()
+    assert hou_wos and all(w["location_id"] == hou["id"] for w in hou_wos)
+
+    # Dashboard accepts a location filter
+    d = client.get(f"/api/dashboard?location_id={hou['id']}", headers=staff_headers).json()
+    assert "open_work_orders" in d
+
+    # Equipment filters by location too
+    eq = client.get(f"/api/equipment?location_id={hou['id']}", headers=staff_headers).json()
+    assert eq and all(e["location_id"] == hou["id"] for e in eq)
+
+
+def test_create_location_manager_only_and_unique_code(client, staff_headers):
+    # Owner can create
+    r = client.post("/api/locations", headers=staff_headers, json={"name": "Dallas Branch", "code": "DAL"})
+    assert r.status_code == 201
+    # Duplicate code rejected
+    assert client.post("/api/locations", headers=staff_headers, json={"name": "Dup", "code": "DAL"}).status_code == 409
+    # A technician cannot create locations
+    tok = client.post("/api/auth/login", json={"email": "tech@apexrepair.com", "password": "Password123"}).json()["access_token"]
+    h = {"Authorization": f"Bearer {tok}"}
+    assert client.post("/api/locations", headers=h, json={"name": "X", "code": "X1"}).status_code == 403
+
+
 def test_api_key_auth_flow(client, staff_headers):
     created = client.post("/api/developer/api-keys", headers=staff_headers, json={"name": "Test integration"})
     assert created.status_code == 201

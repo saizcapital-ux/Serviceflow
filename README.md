@@ -43,6 +43,11 @@ record:
 - **Travelers** — Per-equipment-type checklist templates applied to jobs.
 - **Installable PWA** — Add the app to a phone's home screen; shell works
   offline.
+- **Multi-location** — Run several branches under one tenant; filter every
+  view by location.
+- **Audit log** — A complete who-did-what trail across the workspace.
+- **Developer platform** — API keys + a public integration API, and
+  HMAC-signed outbound webhooks on key events.
 
 ---
 

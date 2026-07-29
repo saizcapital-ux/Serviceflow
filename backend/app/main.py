@@ -14,6 +14,7 @@ from app.api.routers import (
     developer,
     integration,
     invoices,
+    locations,
     notifications,
     parts,
     portal,
@@ -52,6 +53,7 @@ app.include_router(developer.router)
 app.include_router(integration.router)
 app.include_router(billing.router)
 app.include_router(team.router)
+app.include_router(locations.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
 app.include_router(parts.router)
