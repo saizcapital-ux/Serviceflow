@@ -39,6 +39,31 @@ export const statusBadge = (s) =>
   `<span class="badge status ${s}">${esc(STATUS_LABEL[s] || s)}</span>`;
 export const prioBadge = (p) => `<span class="prio ${p}">${esc(p)}</span>`;
 
+const OPEN_SLA = ["intake", "inspection", "quote_pending", "approved", "in_repair", "testing", "ready", "on_hold"];
+const DONE_SLA = ["shipped", "closed"];
+
+/** Client-side SLA badge from a work order's status + promised date. */
+export function slaBadge(w) {
+  if (!w.promised_date) return "";
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const promised = new Date(w.promised_date + "T00:00");
+  const days = Math.round((promised - today) / 86400000);
+  if (OPEN_SLA.includes(w.status)) {
+    if (days < 0) return `<span class="badge status cancelled">⚠ ${Math.abs(days)}d overdue</span>`;
+    if (days <= 3) return `<span class="badge status on_hold">Due in ${days}d</span>`;
+    return `<span class="badge status ready">On track</span>`;
+  }
+  if (DONE_SLA.includes(w.status)) {
+    // updated_at ~ completion; on time if completed on/before promised.
+    const done = w.updated_at ? new Date(w.updated_at) : today;
+    done.setHours(0, 0, 0, 0);
+    return done <= promised
+      ? `<span class="badge status shipped">On time</span>`
+      : `<span class="badge status cancelled">Late</span>`;
+  }
+  return "";
+}
+
 export function toast(msg, kind = "") {
   let wrap = el(".toast-wrap");
   if (!wrap) { wrap = document.createElement("div"); wrap.className = "toast-wrap"; document.body.appendChild(wrap); }

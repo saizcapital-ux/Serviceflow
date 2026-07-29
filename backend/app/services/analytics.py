@@ -80,6 +80,11 @@ def summary(db: Session, organization_id: int) -> dict:
         key=lambda r: r["hours"], reverse=True,
     )
 
+    # SLA: on-time delivery rate among completed jobs with a promised date.
+    from app.services import sla
+    on_time, with_promise = sla.on_time_delivery(completed)
+    on_time_pct = round(on_time / with_promise * 100, 1) if with_promise else None
+
     open_total = sum(1 for w in wos if w.status not in CLOSED_STATES
                      and w.status not in (WorkOrderStatus.cancelled,))
     paid_revenue = round(sum(i.total for i in invoices if i.status == InvoiceStatus.paid), 2)
@@ -91,6 +96,7 @@ def summary(db: Session, organization_id: int) -> dict:
         "completed_90d": done_since(90),
         "open_total": open_total,
         "avg_turnaround_days": avg_turnaround,
+        "on_time_pct": on_time_pct,
         "paid_revenue": paid_revenue,
         "outstanding_revenue": outstanding,
         "revenue_by_month": revenue_by_month,

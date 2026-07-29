@@ -213,7 +213,7 @@ def seed() -> None:
                       "Limitorque SMB actuator not reaching full travel",
                       "Actuator stalls at ~70% open. Torque switch suspected. Bench test requested.",
                       [WorkOrderStatus.intake, WorkOrderStatus.inspection, WorkOrderStatus.quote_pending],
-                      ServiceType.shop_repair, Priority.normal, assigned=tech)
+                      ServiceType.shop_repair, Priority.normal, assigned=tech, promised_offset=-3)
         q2 = Quote(work_order_id=wo2.id, number="WO-2026-0002-Q1", status=QuoteStatus.sent,
                    valid_until=today + timedelta(days=21))
         db.add(q2); db.flush()
@@ -267,7 +267,7 @@ def seed() -> None:
                       [WorkOrderStatus.intake, WorkOrderStatus.inspection, WorkOrderStatus.in_repair,
                        WorkOrderStatus.testing, WorkOrderStatus.ready, WorkOrderStatus.shipped,
                        WorkOrderStatus.closed],
-                      ServiceType.shop_repair, Priority.low, assigned=tech, promised_offset=-30)
+                      ServiceType.shop_repair, Priority.low, assigned=tech, promised_offset=-5)
         inv = Invoice(organization_id=org.id, number="INV-2025-0031", work_order_id=wo5.id,
                       customer_id=acme.id, status=InvoiceStatus.paid, subtotal=640, tax=52.80,
                       total=692.80, due_date=today - timedelta(days=15),
@@ -338,11 +338,15 @@ def seed() -> None:
                      entity_type="part", entity_id=None, created_at=now - timedelta(hours=8)),
         ])
 
-        db.flush()
-        # Backdate the closed job's start so turnaround reads realistically
-        # (updated_at is refreshed to ~now on commit via onupdate).
-        wo5.created_at = datetime.now(timezone.utc) - timedelta(days=9)
-
+        db.commit()
+        # Backdate the closed job's timeline via a Core UPDATE (explicit values
+        # bypass the updated_at onupdate default), so it reads as an on-time,
+        # ~6-day-turnaround historical repair.
+        from sqlalchemy import update
+        db.execute(update(WorkOrder).where(WorkOrder.id == wo5.id).values(
+            created_at=datetime.now(timezone.utc) - timedelta(days=12),
+            updated_at=datetime.now(timezone.utc) - timedelta(days=6),
+        ))
         db.commit()
         print("Seed complete.")
         print("  Staff:    admin@apexrepair.com / writer@apexrepair.com / tech@apexrepair.com")

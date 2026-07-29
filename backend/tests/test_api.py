@@ -307,6 +307,22 @@ def test_audit_log_owner_manager_only(client):
     assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
 
 
+def test_dashboard_sla_counts(client, staff_headers):
+    d = client.get("/api/dashboard", headers=staff_headers).json()
+    assert "overdue_open" in d and "due_soon_open" in d
+    # WO-2026-0002 is seeded with a promised date 3 days in the past (overdue, open)
+    assert d["overdue_open"] >= 1
+    # WO-2026-0003/0004 are promised within a few days (due soon)
+    assert d["due_soon_open"] >= 1
+
+
+def test_analytics_on_time_pct(client, staff_headers):
+    a = client.get("/api/analytics/summary", headers=staff_headers).json()
+    assert "on_time_pct" in a
+    # The one completed job (WO-2025-0288) was delivered before its promised date
+    assert a["on_time_pct"] == 100.0
+
+
 def test_analytics_summary(client, staff_headers):
     a = client.get("/api/analytics/summary", headers=staff_headers).json()
     assert set(a) >= {"completed_30d", "avg_turnaround_days", "revenue_by_month",

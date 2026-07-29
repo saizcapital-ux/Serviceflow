@@ -491,6 +491,8 @@ class DashboardStats(BaseModel):
     awaiting_approval: int
     ready_to_ship: int
     field_visits_scheduled: int
+    overdue_open: int
+    due_soon_open: int
     by_status: list[StatusCount]
     recent: list[WorkOrderSummary]
 

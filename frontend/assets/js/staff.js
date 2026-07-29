@@ -1,7 +1,7 @@
 /* Staff application — hash-routed SPA for service-center employees. */
 import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText } from "/assets/js/api.js";
 import {
-  el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
+  el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge, slaBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
 } from "/assets/js/ui.js";
 
@@ -133,6 +133,8 @@ async function renderDashboard() {
       ${stat("Rush Jobs", d.rush_jobs, "accent", "need attention")}
       ${stat("Awaiting Approval", d.awaiting_approval, "warn", "quotes with customer")}
       ${stat("Ready to Ship", d.ready_to_ship, "ok", "completed &amp; tested")}
+      ${stat("Overdue", d.overdue_open, d.overdue_open ? "accent" : "", "past promised date")}
+      ${stat("Due soon", d.due_soon_open, "warn", "within 3 days")}
       ${stat("Field Visits", d.field_visits_scheduled, "", "scheduled on-site")}
     </div>
     <div class="grid" style="grid-template-columns:2fr 1fr">
@@ -178,7 +180,7 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
       <button class="btn btn-primary btn-sm" id="pgNew">+ New Work Order</button></div>
     ${title === "Work Orders" ? filterBar : ""}
     <div class="card"><div class="table-wrap"><table class="data">
-      <thead><tr><th>WO #</th><th>Equipment</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>Promised</th></tr></thead>
+      <thead><tr><th>WO #</th><th>Equipment</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>SLA</th><th>Promised</th></tr></thead>
       <tbody>${list.map((w) => `<tr data-wo="${w.id}">
         <td class="mono nowrap">${esc(w.number)}</td>
         <td class="nowrap" data-eq="${w.equipment_id || ""}">${w.equipment_id ? "…" : '<span class="muted">—</span>'}</td>
@@ -186,7 +188,8 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
         <td class="nowrap">${w.service_type === "field_service" ? "📍 Field" : "🏭 Shop"}</td>
         <td>${statusBadge(w.status)}</td>
         <td>${prioBadge(w.priority)}</td>
-        <td class="nowrap muted">${fmtDate(w.promised_date)}</td></tr>`).join("") || emptyRow(7)}
+        <td class="nowrap">${slaBadge(w) || '<span class="muted">—</span>'}</td>
+        <td class="nowrap muted">${fmtDate(w.promised_date)}</td></tr>`).join("") || emptyRow(8)}
       </tbody></table></div></div>`;
   el("#pgNew").addEventListener("click", openNewWorkOrder);
   els(".filter").forEach((b) => b.addEventListener("click", () => {
@@ -247,6 +250,7 @@ async function renderWorkOrder(id) {
     <div class="page-title">
       <div><h1 style="margin-bottom:4px">${esc(w.title)}</h1>
         <div class="row"><span class="mono">${esc(w.number)}</span> ${statusBadge(w.status)} ${prioBadge(w.priority)}
+        ${slaBadge(w)}
         <span class="badge">${w.service_type === "field_service" ? "📍 Field Service" : "🏭 Shop Repair"}</span></div></div>
       <div class="row">
         ${w.service_type === "field_service" ? '<button class="btn btn-ghost btn-sm" id="schedBtn">📅 Schedule</button>' : ""}
@@ -1067,6 +1071,7 @@ async function renderAnalytics() {
     <div class="page-title"><h1>Analytics</h1><span class="muted">Shop performance at a glance</span></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:22px">
       ${stat("Completed (30d)", a.completed_30d, "ok", `${a.completed_90d} in last 90d`)}
+      ${stat("On-time delivery", a.on_time_pct != null ? `${a.on_time_pct}%` : "—", a.on_time_pct != null && a.on_time_pct < 90 ? "warn" : "ok", "vs promised date")}
       ${stat("Avg turnaround", `${a.avg_turnaround_days}d`, "", "intake → shipped")}
       ${stat("Open jobs", a.open_total, "warn", "in shop &amp; field")}
       ${stat("Paid revenue", money(a.paid_revenue), "ok", "collected")}
