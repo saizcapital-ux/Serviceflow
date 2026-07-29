@@ -307,6 +307,29 @@ def test_audit_log_owner_manager_only(client):
     assert client.get("/api/audit", headers=h).status_code == 403  # technician blocked
 
 
+def test_create_customer_contact_and_equipment(client, staff_headers):
+    # Create a customer
+    cust = client.post("/api/customers", headers=staff_headers,
+                       json={"name": "New Co", "account_number": "NEWCO-9"}).json()
+    assert cust["id"]
+    # Add a contact
+    ct = client.post(f"/api/customers/{cust['id']}/contacts", headers=staff_headers,
+                     json={"name": "Jane Doe", "title": "Planner", "email": "jane@newco.com"})
+    assert ct.status_code == 201 and ct.json()["name"] == "Jane Doe"
+    # It appears on the customer detail
+    detail = client.get(f"/api/customers/{cust['id']}", headers=staff_headers).json()
+    assert any(c["name"] == "Jane Doe" for c in detail["contacts"])
+    # Add equipment for the customer
+    eq = client.post("/api/equipment", headers=staff_headers,
+                     json={"customer_id": cust["id"], "equipment_type": "pump", "tag": "PMP-NEW"})
+    assert eq.status_code == 201 and eq.json()["tag"] == "PMP-NEW"
+
+
+def test_add_contact_missing_customer_404(client, staff_headers):
+    r = client.post("/api/customers/999999/contacts", headers=staff_headers, json={"name": "X"})
+    assert r.status_code == 404
+
+
 def test_asset_reliability(client, staff_headers):
     rows = client.get("/api/analytics/reliability", headers=staff_headers).json()
     assert isinstance(rows, list) and rows

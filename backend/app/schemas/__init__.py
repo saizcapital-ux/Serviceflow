@@ -68,6 +68,13 @@ class ContactOut(ORMModel):
     phone: str | None = None
 
 
+class ContactCreate(BaseModel):
+    name: str
+    title: str | None = None
+    email: str | None = None
+    phone: str | None = None
+
+
 class CustomerBase(BaseModel):
     name: str
     account_number: str

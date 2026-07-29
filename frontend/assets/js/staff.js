@@ -96,6 +96,7 @@ async function router() {
     if (route === "workorders" && id) return renderWorkOrder(id);
     if (route === "workorders") return renderWorkOrders();
     if (route === "field") return renderDispatch();
+    if (route === "customers" && id) return renderCustomerDetail(id);
     if (route === "customers") return renderCustomers();
     if (route === "equipment" && id) return renderEquipmentDetail(id);
     if (route === "equipment") return renderEquipment();
@@ -712,15 +713,159 @@ async function renderCustomers() {
   loading();
   const list = await api.customers();
   view.innerHTML = `
-    <div class="page-title"><h1>Customers</h1></div>
+    <div class="page-title"><h1>Customers</h1>
+      <button class="btn btn-primary btn-sm" id="newCustomer">+ New customer</button></div>
     <div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>Account</th><th>Name</th><th>Contact</th><th>Phone</th></tr></thead>
-      <tbody>${list.map((c) => `<tr>
+      <tbody>${list.map((c) => `<tr data-cust="${c.id}">
         <td class="mono">${esc(c.account_number)}</td><td><strong>${esc(c.name)}</strong></td>
         <td>${esc(c.contacts?.[0]?.name || "—")}<div class="muted" style="font-size:.82rem">${esc(c.contacts?.[0]?.title || "")}</div></td>
         <td class="muted">${esc(c.phone || "—")}</td></tr>`).join("") || emptyRow(4)}
       </tbody></table></div></div>`;
-  els("tr", view).forEach((tr) => tr.style.cursor = "default");
+  el("#newCustomer").addEventListener("click", openNewCustomer);
+  els("tr[data-cust]", view).forEach((tr) =>
+    tr.addEventListener("click", () => (location.hash = `#/customers/${tr.dataset.cust}`)));
+}
+
+function openNewCustomer() {
+  const m = modal(`<div class="card-head"><h3>New customer</h3></div>
+    <div class="card-body stack">
+      <div class="row">
+        <label class="field grow"><span>Company name</span><input id="cn" placeholder="Acme Power & Water" /></label>
+        <label class="field" style="max-width:150px"><span>Account #</span><input id="cacc" placeholder="ACME-001" /></label>
+      </div>
+      <div class="row">
+        <label class="field grow"><span>Email</span><input id="cem" type="email" /></label>
+        <label class="field grow"><span>Phone</span><input id="cph" /></label>
+      </div>
+      <label class="field"><span>Billing address</span><textarea id="cba"></textarea></label>
+      <label class="field" style="max-width:200px"><span>Approval limit ($, optional)</span><input id="cal" type="number" step="0.01" /></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="ccx">Cancel</button>
+        <button class="btn btn-primary" id="cok">Create customer</button></div></div>`);
+  el("#ccx", m.root).onclick = m.close;
+  el("#cok", m.root).onclick = async () => {
+    const name = el("#cn", m.root).value.trim(), account_number = el("#cacc", m.root).value.trim();
+    if (!name || !account_number) return toast("Name and account number are required", "err");
+    try {
+      const c = await api.createCustomer({
+        name, account_number, email: el("#cem", m.root).value.trim() || null,
+        phone: el("#cph", m.root).value.trim() || null, billing_address: el("#cba", m.root).value.trim() || null,
+        approval_limit: +el("#cal", m.root).value || null,
+      });
+      customersCache = null; m.close(); toast("Customer created", "ok"); location.hash = `#/customers/${c.id}`;
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
+async function renderCustomerDetail(id) {
+  loading();
+  const [c, equipment, jobs] = await Promise.all([
+    api.customer(id), api.equipment(id), api.workOrders({ customer_id: id }),
+  ]);
+  const contactRows = (c.contacts || []).map((ct) => `
+    <div class="spread" style="padding:6px 0;border-bottom:1px solid var(--line)">
+      <div><strong>${esc(ct.name)}</strong> <span class="muted">${esc(ct.title || "")}</span></div>
+      <div class="muted" style="font-size:.85rem">${esc(ct.email || "")} ${esc(ct.phone || "")}</div></div>`).join("")
+    || '<p class="muted">No contacts yet.</p>';
+  const eqCards = equipment.map((e) => `<div class="spread" data-eqid="${e.id}" style="padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer">
+      <span>${TYPE_ICON[e.equipment_type]} <strong>${esc(e.tag || TYPE_LABEL[e.equipment_type])}</strong>
+        <span class="muted">${esc(e.manufacturer || "")} ${esc(e.model || "")}</span></span>
+      <span class="mono muted" style="font-size:.8rem">${esc(e.serial_number || "")}</span></div>`).join("")
+    || '<p class="muted">No equipment on file.</p>';
+  const jobRows = jobs.map((w) => `<tr data-wo="${w.id}">
+      <td class="mono nowrap">${esc(w.number)}</td><td>${esc(w.title)}</td>
+      <td>${statusBadge(w.status)}</td><td>${slaBadge(w) || ""}</td></tr>`).join("")
+    || '<tr><td colspan="4" class="muted" style="text-align:center;padding:16px">No work orders yet.</td></tr>';
+
+  view.innerHTML = `
+    <div class="row" style="margin-bottom:8px"><a href="#/customers">← Customers</a></div>
+    <div class="page-title"><div><h1 style="margin-bottom:4px">${esc(c.name)}</h1>
+      <div class="muted">${esc(c.account_number)}${c.approval_limit != null ? ` · approval limit ${money(c.approval_limit)}` : ""}</div></div></div>
+    <div class="grid" style="grid-template-columns:1fr 1.4fr;align-items:start">
+      <div class="stack">
+        <div class="card"><div class="card-head"><h3>Details</h3></div>
+          <div class="card-body"><dl class="kv">
+            <dt>Email</dt><dd>${esc(c.email || "—")}</dd><dt>Phone</dt><dd>${esc(c.phone || "—")}</dd>
+            <dt>Billing</dt><dd>${esc(c.billing_address || "—")}</dd></dl></div></div>
+        <div class="card"><div class="card-head"><h3>Contacts</h3>
+          <button class="btn btn-ghost btn-sm" id="addContact">+ Add</button></div>
+          <div class="card-body">${contactRows}</div></div>
+        <div class="card"><div class="card-head"><h3>Equipment <span class="badge">${equipment.length}</span></h3>
+          <button class="btn btn-ghost btn-sm" id="addEquip">+ Add</button></div>
+          <div class="card-body">${eqCards}</div></div>
+      </div>
+      <div class="card"><div class="card-head"><h3>Work orders <span class="badge">${jobs.length}</span></h3></div>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>WO #</th><th>Title</th><th>Status</th><th>SLA</th></tr></thead>
+          <tbody>${jobRows}</tbody></table></div></div>
+    </div>`;
+  el("#addContact").addEventListener("click", () => openAddContact(id));
+  el("#addEquip").addEventListener("click", () => openNewEquipment(id));
+  els("[data-eqid]").forEach((r) => r.addEventListener("click", () => (location.hash = `#/equipment/${r.dataset.eqid}`)));
+  els("tr[data-wo]").forEach((tr) => tr.addEventListener("click", () => (location.hash = `#/workorders/${tr.dataset.wo}`)));
+}
+
+function openAddContact(customerId) {
+  const m = modal(`<div class="card-head"><h3>Add contact</h3></div>
+    <div class="card-body stack">
+      <div class="row"><label class="field grow"><span>Name</span><input id="ctn" /></label>
+        <label class="field grow"><span>Title</span><input id="ctt" placeholder="Reliability Engineer" /></label></div>
+      <div class="row"><label class="field grow"><span>Email</span><input id="cte" type="email" /></label>
+        <label class="field grow"><span>Phone</span><input id="ctp" /></label></div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="ctx">Cancel</button>
+        <button class="btn btn-primary" id="ctok">Add contact</button></div></div>`);
+  el("#ctx", m.root).onclick = m.close;
+  el("#ctok", m.root).onclick = async () => {
+    const name = el("#ctn", m.root).value.trim();
+    if (!name) return toast("Name is required", "err");
+    try {
+      await api.addContact(customerId, { name, title: el("#ctt", m.root).value.trim() || null,
+        email: el("#cte", m.root).value.trim() || null, phone: el("#ctp", m.root).value.trim() || null });
+      customersCache = null; m.close(); toast("Contact added", "ok"); renderCustomerDetail(customerId);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
+async function openNewEquipment(fixedCustomerId) {
+  const customers = customersCache || (customersCache = await api.customers());
+  const custOptions = fixedCustomerId
+    ? `<option value="${fixedCustomerId}" selected>${esc((customers.find((c) => c.id == fixedCustomerId) || {}).name || "")}</option>`
+    : customers.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  const locOpts = (locationsCache || []).map((l) => `<option value="${l.id}">${esc(l.name)}</option>`).join("");
+  const m = modal(`<div class="card-head"><h3>New equipment</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Customer</span><select id="en" ${fixedCustomerId ? "disabled" : ""}>${custOptions}</select></label>
+      <div class="row">
+        <label class="field grow"><span>Type</span><select id="etype">
+          ${Object.keys(TYPE_LABEL).map((t) => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join("")}</select></label>
+        <label class="field grow"><span>Asset tag</span><input id="etag" placeholder="MTR-4471" /></label>
+      </div>
+      <div class="row">
+        <label class="field grow"><span>Manufacturer</span><input id="emfr" /></label>
+        <label class="field grow"><span>Model</span><input id="emod" /></label>
+      </div>
+      <div class="row">
+        <label class="field grow"><span>Serial #</span><input id="eser" /></label>
+        <label class="field grow"><span>Location on site</span><input id="eloc" /></label>
+      </div>
+      ${locOpts ? `<label class="field"><span>Branch</span><select id="ebranch"><option value="">— none —</option>${locOpts}</select></label>` : ""}
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="ecx">Cancel</button>
+        <button class="btn btn-primary" id="eok">Add equipment</button></div></div>`);
+  el("#ecx", m.root).onclick = m.close;
+  el("#eok", m.root).onclick = async () => {
+    const customer_id = +(fixedCustomerId || el("#en", m.root).value);
+    if (!customer_id) return toast("Customer is required", "err");
+    try {
+      await api.createEquipment({
+        customer_id, equipment_type: el("#etype", m.root).value, tag: el("#etag", m.root).value.trim() || null,
+        manufacturer: el("#emfr", m.root).value.trim() || null, model: el("#emod", m.root).value.trim() || null,
+        serial_number: el("#eser", m.root).value.trim() || null, location: el("#eloc", m.root).value.trim() || null,
+        location_id: +(el("#ebranch", m.root)?.value) || null,
+      });
+      m.close(); toast("Equipment added", "ok");
+      if (fixedCustomerId) renderCustomerDetail(fixedCustomerId); else renderEquipment();
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 /* ---------- equipment ---------- */
@@ -730,7 +875,8 @@ async function renderEquipment() {
   const cust = customersCache || (customersCache = await api.customers());
   const byId = Object.fromEntries(cust.map((c) => [c.id, c.name]));
   view.innerHTML = `
-    <div class="page-title"><h1>Equipment</h1></div>
+    <div class="page-title"><h1>Equipment</h1>
+      <button class="btn btn-primary btn-sm" id="newEquip">+ New equipment</button></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
       ${list.map((e) => `<div class="card card-pad" data-eqid="${e.id}" style="cursor:pointer">
         <div class="row" style="margin-bottom:8px"><span style="font-size:1.8rem">${TYPE_ICON[e.equipment_type]}</span>
@@ -742,6 +888,7 @@ async function renderEquipment() {
           <dt>Location</dt><dd>${esc(e.location || "—")}</dd></dl></div>`).join("") ||
       '<div class="empty"><div class="big">⚙️</div>No equipment yet.</div>'}
     </div>`;
+  el("#newEquip").addEventListener("click", () => openNewEquipment());
   els("[data-eqid]").forEach((c) => c.addEventListener("click", () => (location.hash = `#/equipment/${c.dataset.eqid}`)));
 }
 

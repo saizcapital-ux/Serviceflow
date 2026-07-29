@@ -7,8 +7,15 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import require_staff
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Customer, Equipment, User
-from app.schemas import CustomerCreate, CustomerOut, EquipmentCreate, EquipmentOut
+from app.models import Contact, Customer, Equipment, User
+from app.schemas import (
+    ContactCreate,
+    ContactOut,
+    CustomerCreate,
+    CustomerOut,
+    EquipmentCreate,
+    EquipmentOut,
+)
 from app.services.qr import qr_svg
 
 router = APIRouter(prefix="/api", tags=["customers"])
@@ -59,6 +66,20 @@ def get_customer(customer_id: int, db: Session = Depends(get_db), user: User = D
     if not customer:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found.")
     return customer
+
+
+@router.post("/customers/{customer_id}/contacts", response_model=ContactOut, status_code=status.HTTP_201_CREATED)
+def add_contact(customer_id: int, payload: ContactCreate, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    customer = db.scalar(
+        select(Customer).where(Customer.id == customer_id, Customer.organization_id == user.organization_id)
+    )
+    if not customer:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found.")
+    contact = Contact(customer_id=customer_id, **payload.model_dump())
+    db.add(contact)
+    db.commit()
+    db.refresh(contact)
+    return contact
 
 
 @router.get("/equipment", response_model=list[EquipmentOut])

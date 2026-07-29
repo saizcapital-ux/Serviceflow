@@ -41,7 +41,9 @@ export const api = {
   createLocation: (b) => request("/api/locations", { method: "POST", body: b }),
   // customers & equipment
   customers: (q) => request(`/api/customers${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  customer: (id) => request(`/api/customers/${id}`),
   createCustomer: (b) => request("/api/customers", { method: "POST", body: b }),
+  addContact: (customerId, b) => request(`/api/customers/${customerId}/contacts`, { method: "POST", body: b }),
   equipment: (customerId, locationId) => {
     const qs = new URLSearchParams();
     if (customerId) qs.set("customer_id", customerId);
