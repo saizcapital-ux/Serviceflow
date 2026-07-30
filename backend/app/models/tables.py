@@ -23,6 +23,9 @@ from app.models.enums import (
     EquipmentType,
     EventType,
     FindingSeverity,
+    InvoiceStatus,
+    NotificationChannel,
+    NotificationStatus,
     Priority,
     QuoteStatus,
     ServiceType,
@@ -41,7 +44,16 @@ class Organization(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     slug: Mapped[str] = mapped_column(String(80), unique=True, index=True)
-    plan: Mapped[str] = mapped_column(String(40), default="trial")
+    # SaaS subscription (billing for Serviceflow itself).
+    plan: Mapped[str] = mapped_column(String(40), default="trial")  # trial|starter|pro|enterprise
+    subscription_status: Mapped[str] = mapped_column(String(20), default="trialing")  # trialing|active|past_due|canceled
+    seats: Mapped[int] = mapped_column(Integer, default=5)
+    trial_ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(80))
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(80))
+    # Internal fully-burdened labor cost per hour, used for job-costing/margin.
+    labor_cost_rate: Mapped[float] = mapped_column(Float, default=95.0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     users: Mapped[list[User]] = relationship(back_populates="organization")
@@ -65,6 +77,19 @@ class User(Base):
     organization: Mapped[Organization] = relationship(back_populates="users")
 
 
+class Location(Base):
+    __tablename__ = "locations"
+    __table_args__ = (UniqueConstraint("organization_id", "code", name="uq_location_org_code"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    code: Mapped[str] = mapped_column(String(20), nullable=False)
+    address: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Customer(Base):
     __tablename__ = "customers"
     __table_args__ = (
@@ -79,6 +104,8 @@ class Customer(Base):
     phone: Mapped[str | None] = mapped_column(String(40))
     billing_address: Mapped[str | None] = mapped_column(Text)
     shipping_address: Mapped[str | None] = mapped_column(Text)
+    # Quotes above this amount require a PO / explicit sign-off (null = no limit).
+    approval_limit: Mapped[float | None] = mapped_column(Float)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -105,6 +132,7 @@ class Equipment(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"), index=True)
     tag: Mapped[str | None] = mapped_column(String(60))
     equipment_type: Mapped[EquipmentType] = mapped_column(Enum(EquipmentType), default=EquipmentType.other)
     manufacturer: Mapped[str | None] = mapped_column(String(120))
@@ -129,6 +157,7 @@ class WorkOrder(Base):
     number: Mapped[str] = mapped_column(String(40), nullable=False)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     equipment_id: Mapped[int | None] = mapped_column(ForeignKey("equipment.id"), index=True)
+    location_id: Mapped[int | None] = mapped_column(ForeignKey("locations.id"), index=True)
     service_type: Mapped[ServiceType] = mapped_column(Enum(ServiceType), default=ServiceType.shop_repair)
     priority: Mapped[Priority] = mapped_column(Enum(Priority), default=Priority.normal)
     status: Mapped[WorkOrderStatus] = mapped_column(
@@ -136,6 +165,7 @@ class WorkOrder(Base):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     problem_description: Mapped[str | None] = mapped_column(Text)
+    po_number: Mapped[str | None] = mapped_column(String(60))
     assigned_to: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     scheduled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     promised_date: Mapped[date | None] = mapped_column(Date)
@@ -151,8 +181,15 @@ class WorkOrder(Base):
     )
     findings: Mapped[list[Finding]] = relationship(back_populates="work_order", cascade="all, delete-orphan")
     quotes: Mapped[list[Quote]] = relationship(back_populates="work_order", cascade="all, delete-orphan")
+    invoices: Mapped[list[Invoice]] = relationship(back_populates="work_order", cascade="all, delete-orphan")
     time_entries: Mapped[list[TimeEntry]] = relationship(
         back_populates="work_order", cascade="all, delete-orphan"
+    )
+    parts_used: Mapped[list[PartUsage]] = relationship(
+        back_populates="work_order", cascade="all, delete-orphan"
+    )
+    checklist_items: Mapped[list[ChecklistItem]] = relationship(
+        back_populates="work_order", cascade="all, delete-orphan", order_by="ChecklistItem.position"
     )
     attachments: Mapped[list[Attachment]] = relationship(
         back_populates="work_order", cascade="all, delete-orphan"
@@ -220,6 +257,177 @@ class QuoteLine(Base):
     line_total: Mapped[float] = mapped_column(Float, default=0.0)
 
     quote: Mapped[Quote] = relationship(back_populates="lines")
+
+
+class Invoice(Base):
+    __tablename__ = "invoices"
+    __table_args__ = (UniqueConstraint("organization_id", "number", name="uq_invoice_org_number"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    number: Mapped[str] = mapped_column(String(40), nullable=False)
+    work_order_id: Mapped[int] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
+    status: Mapped[InvoiceStatus] = mapped_column(Enum(InvoiceStatus), default=InvoiceStatus.sent, index=True)
+    subtotal: Mapped[float] = mapped_column(Float, default=0.0)
+    tax: Mapped[float] = mapped_column(Float, default=0.0)
+    total: Mapped[float] = mapped_column(Float, default=0.0)
+    notes: Mapped[str | None] = mapped_column(Text)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    work_order: Mapped[WorkOrder] = relationship(back_populates="invoices")
+    lines: Mapped[list[InvoiceLine]] = relationship(back_populates="invoice", cascade="all, delete-orphan")
+
+
+class InvoiceLine(Base):
+    __tablename__ = "invoice_lines"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    invoice_id: Mapped[int] = mapped_column(ForeignKey("invoices.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20), default="labor")  # labor | part | misc
+    description: Mapped[str] = mapped_column(String(300), nullable=False)
+    quantity: Mapped[float] = mapped_column(Float, default=1.0)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    line_total: Mapped[float] = mapped_column(Float, default=0.0)
+
+    invoice: Mapped[Invoice] = relationship(back_populates="lines")
+
+
+class ChecklistTemplate(Base):
+    __tablename__ = "checklist_templates"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Optional: restrict the template to one equipment type (null = any).
+    equipment_type: Mapped[EquipmentType | None] = mapped_column(Enum(EquipmentType))
+    items: Mapped[list] = mapped_column(JSON, default=list)  # list[str] of step labels
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ChecklistItem(Base):
+    __tablename__ = "checklist_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_order_id: Mapped[int] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    label: Mapped[str] = mapped_column(String(300), nullable=False)
+    is_done: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    completed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    work_order: Mapped[WorkOrder] = relationship(back_populates="checklist_items")
+
+
+class Part(Base):
+    __tablename__ = "parts"
+    __table_args__ = (UniqueConstraint("organization_id", "sku", name="uq_part_org_sku"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    sku: Mapped[str] = mapped_column(String(60), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    unit_cost: Mapped[float] = mapped_column(Float, default=0.0)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    quantity_on_hand: Mapped[int] = mapped_column(Integer, default=0)
+    reorder_point: Mapped[int] = mapped_column(Integer, default=0)
+    location: Mapped[str | None] = mapped_column(String(120))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PartUsage(Base):
+    __tablename__ = "part_usages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_order_id: Mapped[int] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    part_id: Mapped[int] = mapped_column(ForeignKey("parts.id"), index=True)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+    unit_price: Mapped[float] = mapped_column(Float, default=0.0)
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    work_order: Mapped[WorkOrder] = relationship(back_populates="parts_used")
+    part: Mapped[Part] = relationship()
+
+
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    prefix: Mapped[str] = mapped_column(String(16), index=True)   # shown in the UI
+    hashed_key: Mapped[str] = mapped_column(String(80), index=True)  # sha256 hex
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class Webhook(Base):
+    __tablename__ = "webhooks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    url: Mapped[str] = mapped_column(String(500), nullable=False)
+    secret: Mapped[str] = mapped_column(String(80))  # used to HMAC-sign payloads
+    events: Mapped[list] = mapped_column(JSON, default=list)  # e.g. ["invoice.paid"] or ["*"]
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    deliveries: Mapped[list[WebhookDelivery]] = relationship(
+        back_populates="webhook", cascade="all, delete-orphan", order_by="WebhookDelivery.created_at.desc()"
+    )
+
+
+class WebhookDelivery(Base):
+    __tablename__ = "webhook_deliveries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    webhook_id: Mapped[int] = mapped_column(ForeignKey("webhooks.id"), index=True)
+    event: Mapped[str] = mapped_column(String(60))
+    status_code: Mapped[int | None] = mapped_column(Integer)
+    success: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    webhook: Mapped[Webhook] = relationship(back_populates="deliveries")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    actor_label: Mapped[str] = mapped_column(String(200), default="system")
+    action: Mapped[str] = mapped_column(String(60), index=True)  # e.g. work_order.status_changed
+    entity_type: Mapped[str | None] = mapped_column(String(40))
+    entity_id: Mapped[int | None] = mapped_column(Integer)
+    summary: Mapped[str] = mapped_column(Text)
+    meta: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    customer_id: Mapped[int | None] = mapped_column(ForeignKey("customers.id"), index=True)
+    work_order_id: Mapped[int | None] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    channel: Mapped[NotificationChannel] = mapped_column(Enum(NotificationChannel), default=NotificationChannel.email)
+    recipient: Mapped[str] = mapped_column(String(255))
+    subject: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[NotificationStatus] = mapped_column(Enum(NotificationStatus), default=NotificationStatus.queued)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class TimeEntry(Base):

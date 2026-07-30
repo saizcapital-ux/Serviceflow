@@ -2,12 +2,34 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routers import auth, customers, dashboard, portal, work_orders
+from app.api.routers import (
+    analytics,
+    attachments,
+    audit,
+    auth,
+    billing,
+    checklists,
+    customers,
+    dashboard,
+    developer,
+    integration,
+    invoices,
+    locations,
+    notifications,
+    parts,
+    portal,
+    search,
+    team,
+    work_orders,
+)
 from app.core.config import settings
 from app.core.database import Base, engine
 
-# Create tables on startup for zero-config dev. Production uses Alembic migrations.
-Base.metadata.create_all(bind=engine)
+# Zero-config dev: auto-create tables on startup. In production set
+# SERVICEFLOW_ENVIRONMENT=production and manage schema with Alembic
+# (`alembic upgrade head`) instead.
+if settings.environment != "production":
+    Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Serviceflow API",
@@ -26,8 +48,21 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
+app.include_router(analytics.router)
+app.include_router(audit.router)
+app.include_router(developer.router)
+app.include_router(integration.router)
+app.include_router(billing.router)
+app.include_router(team.router)
+app.include_router(search.router)
+app.include_router(locations.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
+app.include_router(parts.router)
+app.include_router(checklists.router)
+app.include_router(invoices.router)
+app.include_router(attachments.router)
+app.include_router(notifications.router)
 app.include_router(portal.router)
 
 

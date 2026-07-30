@@ -1,4 +1,6 @@
 """Operational dashboard metrics for staff."""
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -7,32 +9,35 @@ from app.api.deps import require_staff
 from app.core.database import get_db
 from app.models import Priority, ServiceType, User, WorkOrder, WorkOrderStatus
 from app.schemas import DashboardStats, StatusCount, WorkOrderSummary
-from app.services import workflow
+from app.services import sla, workflow
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
 @router.get("", response_model=DashboardStats)
-def dashboard(db: Session = Depends(get_db), user: User = Depends(require_staff)):
+def dashboard(location_id: int | None = None, db: Session = Depends(get_db), user: User = Depends(require_staff)):
     org = user.organization_id
-    base = select(func.count()).select_from(WorkOrder).where(WorkOrder.organization_id == org)
+    loc = (WorkOrder.location_id == location_id,) if location_id else ()
+    base = select(func.count()).select_from(WorkOrder).where(WorkOrder.organization_id == org, *loc)
 
     def count(*conditions) -> int:
         return db.scalar(base.where(*conditions)) or 0
 
     by_status_rows = db.execute(
         select(WorkOrder.status, func.count())
-        .where(WorkOrder.organization_id == org)
+        .where(WorkOrder.organization_id == org, *loc)
         .group_by(WorkOrder.status)
     ).all()
 
     recent = db.scalars(
         select(WorkOrder)
-        .where(WorkOrder.organization_id == org)
+        .where(WorkOrder.organization_id == org, *loc)
         .order_by(WorkOrder.updated_at.desc())
         .limit(8)
     ).all()
 
+    today = date.today()
+    open_states = WorkOrder.status.in_(sla.OPEN_STATES)
     return DashboardStats(
         open_work_orders=count(WorkOrder.status.in_(workflow.OPEN_STATUSES)),
         rush_jobs=count(
@@ -43,6 +48,11 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(require_staff)
         field_visits_scheduled=count(
             WorkOrder.service_type == ServiceType.field_service,
             WorkOrder.status.in_(workflow.OPEN_STATUSES),
+        ),
+        overdue_open=count(open_states, WorkOrder.promised_date < today),
+        due_soon_open=count(
+            open_states, WorkOrder.promised_date >= today,
+            WorkOrder.promised_date <= today + timedelta(days=sla.DUE_SOON_DAYS),
         ),
         by_status=[StatusCount(status=s, count=c) for s, c in by_status_rows],
         recent=[WorkOrderSummary.model_validate(w) for w in recent],

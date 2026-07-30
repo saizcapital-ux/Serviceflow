@@ -69,3 +69,22 @@ class QuoteStatus(str, enum.Enum):
     approved = "approved"
     rejected = "rejected"
     expired = "expired"
+
+
+class InvoiceStatus(str, enum.Enum):
+    draft = "draft"
+    sent = "sent"
+    paid = "paid"
+    void = "void"
+
+
+class NotificationChannel(str, enum.Enum):
+    email = "email"
+    sms = "sms"
+    inapp = "inapp"
+
+
+class NotificationStatus(str, enum.Enum):
+    queued = "queued"
+    sent = "sent"
+    failed = "failed"

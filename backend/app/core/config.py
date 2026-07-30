@@ -9,6 +9,8 @@ class Settings(BaseSettings):
 
     app_name: str = "Serviceflow"
     environment: str = "development"
+    # Public base URL of the frontend, used to build QR deep-links to assets.
+    app_base_url: str = "http://localhost:5173"
 
     # Database — SQLite by default for zero-config dev; set DATABASE_URL for Postgres.
     database_url: str = "sqlite:///./serviceflow.db"
@@ -20,6 +22,45 @@ class Settings(BaseSettings):
 
     # CORS — comma-separated origins, or "*" for dev.
     cors_origins: str = "*"
+
+    # File storage — "local" (default) or "s3". Local files live under storage_dir.
+    storage_backend: str = "local"
+    storage_dir: str = "./uploads"
+    s3_bucket: str = ""
+    s3_region: str = "us-east-1"
+
+    # Notifications. If SMTP host is unset, emails are logged (console backend)
+    # but still recorded — so the feature works out of the box in dev.
+    notifications_enabled: bool = True
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    email_from: str = "no-reply@serviceflow.app"
+
+    # Stripe (SaaS subscription billing). If no secret key is set, billing runs
+    # in mock mode: checkout activates the plan immediately (great for demos).
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    billing_success_url: str = "http://localhost:5173/app/#/billing?checkout=success"
+    billing_cancel_url: str = "http://localhost:5173/app/#/billing?checkout=cancel"
+
+    @property
+    def stripe_enabled(self) -> bool:
+        return bool(self.stripe_secret_key)
+
+    @property
+    def sqlalchemy_database_url(self) -> str:
+        """Normalized DB URL for SQLAlchemy.
+
+        Managed Postgres providers (Render, Heroku, Railway) sometimes hand out
+        a legacy ``postgres://`` scheme, which SQLAlchemy 2.0 no longer accepts.
+        Rewrite it to ``postgresql://`` so the default (psycopg2) driver is used.
+        """
+        url = self.database_url
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        return url
 
     @property
     def cors_origin_list(self) -> list[str]:

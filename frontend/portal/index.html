@@ -4,8 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#0b1f33" />
+  <link rel="apple-touch-icon" href="/assets/img/icon-192.png" />
   <title>Serviceflow · Customer Portal</title>
+  <script>(function(){try{var t=localStorage.getItem('sf_theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();</script>
   <link rel="stylesheet" href="/assets/css/design-system.css" />
+  <script src="/config.js"></script>
 </head>
 <body>
   <div class="shell">
@@ -13,10 +18,12 @@
       <div class="brand"><div class="logo">S</div><b>Serviceflow</b></div>
       <div class="muted" style="padding:0 8px 10px;font-size:.75rem;text-transform:uppercase;letter-spacing:.05em">Customer Portal</div>
       <a class="nav-link" data-route="orders"><span class="ic">📋</span> My Repairs</a>
+      <a class="nav-link" data-route="invoices"><span class="ic">🧾</span> My Invoices</a>
       <a class="nav-link" data-route="equipment"><span class="ic">⚙️</span> My Equipment</a>
       <div class="spacer"></div>
       <div class="who"><b id="whoName">—</b><span id="whoOrg" class="muted"></span>
-        <div style="margin-top:10px"><a id="logout" class="nav-link" style="padding:.4rem .5rem">↩ Sign out</a></div>
+        <div style="margin-top:10px"><a id="themeToggle" class="nav-link" style="padding:.4rem .5rem">🌙 Dark mode</a></div>
+        <div><a id="logout" class="nav-link" style="padding:.4rem .5rem">↩ Sign out</a></div>
       </div>
     </aside>
     <div class="main">
@@ -28,5 +35,6 @@
     </div>
   </div>
   <script type="module" src="/assets/js/portal.js"></script>
+  <script src="/assets/js/pwa.js"></script>
 </body>
 </html>

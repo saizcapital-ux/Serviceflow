@@ -22,12 +22,32 @@ record:
   Test → Ship, with a full status timeline on every job.
 - **Asset-centric history** — Every motor, valve, pump and actuator has a
   permanent nameplate + repair history, so the 5th visit is faster than the 1st.
-- **Field service** — Schedule and dispatch technicians for on-site work with the
-  same job engine used in the shop.
+- **Quotes & invoicing** — Build quotes with line items; customers approve online;
+  invoice the approved job and export a branded **PDF**.
+- **Job costing** — Log technician labor and see estimate-vs-actual **margin**.
+- **Field dispatch** — Schedule and assign technicians on a dispatch board, with
+  the same job engine used in the shop.
+- **Attachments & photos** — Nameplate pics, inspection photos and test reports
+  on every job (pluggable local/S3 storage).
+- **Notifications** — Customers are emailed on status changes and new quotes
+  (SMTP in prod, console in dev; SMS-ready).
 - **Customer portal** — Your customers log in to see live job status, approve
-  quotes, and pull the complete service history of their equipment.
-- **Multi-tenant** — Every service center is an isolated tenant; Serviceflow is
-  sold as a subscription.
+  quotes, download invoices, and pull the complete service history.
+- **Multi-tenant SaaS** — Isolated tenants with **Stripe subscription billing**
+  (Starter/Pro/Enterprise; mock mode for demos).
+- **Inventory** — Parts catalog with reorder points; parts consumed on jobs
+  decrement stock.
+- **QR asset tags** — Scan a printed tag to open an asset's full repair history.
+- **Analytics** — Throughput, turnaround, revenue, pipeline and technician
+  workload at a glance.
+- **Travelers** — Per-equipment-type checklist templates applied to jobs.
+- **Installable PWA** — Add the app to a phone's home screen; shell works
+  offline.
+- **Multi-location** — Run several branches under one tenant; filter every
+  view by location.
+- **Audit log** — A complete who-did-what trail across the workspace.
+- **Developer platform** — API keys + a public integration API, and
+  HMAC-signed outbound webhooks on key events.
 
 ---
 
@@ -55,10 +75,20 @@ pip install -r requirements.txt
 python -m app.seed            # creates SQLite db + demo data
 uvicorn app.main:app --reload # API on http://localhost:8000  (docs at /docs)
 
+# Production schema is managed with Alembic instead of auto-create:
+#   SERVICEFLOW_ENVIRONMENT=production alembic upgrade head
+
 # 2. Frontend (any static server)
 cd ../frontend
 python -m http.server 5173    # open http://localhost:5173
 ```
+
+### Deploy it to the web (no local setup)
+
+Want a live, shareable URL instead of running it locally? Deploy the backend +
+Postgres to Render (one-click via [`render.yaml`](render.yaml)) and point the
+Netlify-hosted frontend at it with a one-line edit. Full walkthrough:
+**[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
 
 ### Demo logins (created by the seed script)
 

@@ -1,12 +1,15 @@
 /* Customer portal — read-mostly SPA: status, history, and quote approval. */
-import { api, auth } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge,
-  STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal,
+  STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal, initThemeToggle,
 } from "/assets/js/ui.js";
 
-if (!auth.token) location.href = "/login.html";
-if (auth.user && auth.user.role !== "customer") location.href = "/app/";
+// Redirect unauthenticated or non-customer visitors, and stop so boot() below
+// never fires a doomed API call while the browser is navigating away.
+const _authed = auth.token && (!auth.user || auth.user.role === "customer");
+if (!auth.token) location.replace("/login.html");
+else if (auth.user && auth.user.role !== "customer") location.replace("/app/");
 
 const view = el("#view");
 
@@ -17,6 +20,7 @@ function boot() {
   const u = auth.user || {};
   el("#whoName").textContent = u.full_name || u.email;
   el("#logout").addEventListener("click", () => { auth.clear(); location.href = "/login.html"; });
+  initThemeToggle(el("#themeToggle"));
   els(".nav-link[data-route]").forEach((a) =>
     a.addEventListener("click", () => (location.hash = `#/${a.dataset.route}`)));
   window.addEventListener("hashchange", router);
@@ -34,6 +38,7 @@ async function router() {
   try {
     if (route === "orders" && parts[1]) return renderDetail(parts[1]);
     if (route === "equipment") return renderEquipment();
+    if (route === "invoices") return renderInvoices();
     return renderOrders();
   } catch (ex) { view.innerHTML = `<div class="empty"><div class="big">⚠</div>${esc(ex.message)}</div>`; }
 }
@@ -55,13 +60,72 @@ async function renderOrders() {
         ${w.status === "quote_pending" ? '<span class="badge status quote_pending">Action needed</span>' : ""}
       </div></div>`;
   view.innerHTML = `
-    <div class="page-title"><h1>My repairs</h1></div>
+    <div class="page-title"><h1>My repairs</h1>
+      <button class="btn btn-primary" id="requestBtn">＋ Request service</button></div>
     ${open.length ? `<h3 class="muted" style="text-transform:uppercase;font-size:.8rem;letter-spacing:.05em">Active (${open.length})</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr));margin-bottom:24px">${open.map(card).join("")}</div>` :
-      '<div class="empty"><div class="big">✅</div>No active repairs right now.</div>'}
+      '<div class="empty"><div class="big">🔧</div>No active repairs right now.<div style="margin-top:12px"><button class="btn btn-primary" id="requestBtnEmpty">＋ Request service</button></div></div>'}
     ${history.length ? `<h3 class="muted" style="text-transform:uppercase;font-size:.8rem;letter-spacing:.05em">History (${history.length})</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${history.map(card).join("")}</div>` : ""}`;
   els("[data-wo]").forEach((c) => c.addEventListener("click", () => (location.hash = `#/orders/${c.dataset.wo}`)));
+  ["#requestBtn", "#requestBtnEmpty"].forEach((sel) => { const b = el(sel); if (b) b.addEventListener("click", openServiceRequest); });
+}
+
+async function withdraw(woId) {
+  const m = modal(`<div class="card-head"><h3>Withdraw request</h3></div>
+    <div class="card-body stack">
+      <p class="muted">This cancels your request before the service center begins work. You can always submit a new one later.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="wc">Keep request</button>
+        <button class="btn btn-danger" id="wok">Withdraw</button></div></div>`);
+  el("#wc", m.root).onclick = m.close;
+  el("#wok", m.root).onclick = async () => {
+    try {
+      await api.withdrawWorkOrder(woId);
+      m.close(); toast("Request withdrawn.", "");
+      renderDetail(woId);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
+/* ---------- new service request ---------- */
+async function openServiceRequest() {
+  let equipment = [];
+  try { equipment = await api.portalEquipment(); } catch { /* proceed without list */ }
+  const eqOptions = ['<option value="">— Not sure / not listed —</option>']
+    .concat(equipment.map((e) => `<option value="${e.id}">${esc(e.tag || TYPE_LABEL[e.equipment_type])} · ${esc(e.manufacturer || "")} ${esc(e.model || "")}</option>`))
+    .join("");
+  const m = modal(`<div class="card-head"><h3>Request service</h3></div>
+    <div class="card-body stack">
+      <p class="muted">Tell us what needs repair. Your service center receives it immediately and will confirm receipt and inspection.</p>
+      <label class="field"><span>Equipment</span><select id="srEq">${eqOptions}</select></label>
+      <label class="field"><span>What's the problem? <span style="color:var(--danger)">*</span></span>
+        <input id="srTitle" placeholder="e.g. Motor tripping on overload / bearing noise" /></label>
+      <label class="field"><span>Details (symptoms, when it started, operating conditions)</span>
+        <textarea id="srDesc" rows="4"></textarea></label>
+      <div class="row" style="gap:12px">
+        <label class="field" style="flex:1"><span>Priority</span><select id="srPrio">
+          <option value="normal">Normal</option><option value="high">High</option>
+          <option value="rush">Rush — line down</option><option value="low">Low</option></select></label>
+        <label class="field" style="flex:1"><span>PO number (optional)</span><input id="srPo" placeholder="e.g. 4500012345" /></label>
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="srCancel">Cancel</button>
+        <button class="btn btn-primary" id="srSubmit">Submit request</button></div></div>`);
+  el("#srCancel", m.root).onclick = m.close;
+  el("#srSubmit", m.root).onclick = async () => {
+    const title = el("#srTitle", m.root).value.trim();
+    if (!title) return toast("Please describe the problem.", "err");
+    try {
+      const wo = await api.createServiceRequest({
+        equipment_id: el("#srEq", m.root).value ? Number(el("#srEq", m.root).value) : null,
+        title,
+        problem_description: el("#srDesc", m.root).value.trim() || null,
+        priority: el("#srPrio", m.root).value,
+        po_number: el("#srPo", m.root).value.trim() || null,
+      });
+      m.close(); toast(`Request ${wo.number} submitted — thank you!`, "ok");
+      location.hash = `#/orders/${wo.id}`;
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function miniTracker(status) {
@@ -77,6 +141,8 @@ async function renderDetail(id) {
   const w = await api.portalWorkOrder(id);
   const eq = w.equipment;
   const pendingQuote = w.quotes.find((q) => q.status === "sent" || q.status === "draft");
+  const limit = w.customer?.approval_limit;
+  const overLimit = pendingQuote && limit != null && pendingQuote.total > limit;
   const timeline = w.events.map((e) => `
     <li class="${e.event_type}">
       <div class="tl-msg">${esc(e.message || (e.to_status ? `Status updated to ${STATUS_LABEL[e.to_status]}` : ""))}</div>
@@ -87,9 +153,10 @@ async function renderDetail(id) {
     <div class="page-title">
       <div><h1 style="margin-bottom:4px">${esc(w.title)}</h1>
         <div class="row"><span class="mono">${esc(w.number)}</span>${statusBadge(w.status)}</div></div>
+      ${w.status === "intake" ? '<button class="btn btn-ghost" id="withdrawBtn">Withdraw request</button>' : ""}
     </div>
     <div class="card card-pad" style="margin-bottom:18px">${bigTracker(w.status)}</div>
-    ${pendingQuote ? quoteApprovalCard(pendingQuote, w) : ""}
+    ${pendingQuote ? quoteApprovalCard(pendingQuote, w, overLimit, limit) : ""}
     <div class="grid" style="grid-template-columns:1.4fr 1fr">
       <div class="card"><div class="card-head"><h3>Status history</h3></div>
         <div class="card-body"><ul class="timeline">${timeline}</ul></div></div>
@@ -105,12 +172,26 @@ async function renderDetail(id) {
           <div class="card-body stack">${w.quotes.map((q) => `<div class="spread">
             <span class="mono">${esc(q.number)}</span><span>${money(q.total)}
             <span class="badge status ${q.status === "approved" ? "ready" : q.status === "rejected" ? "cancelled" : "quote_pending"}">${esc(q.status)}</span></span></div>`).join("")}</div></div>` : ""}
+        ${(w.invoices || []).length ? `<div class="card"><div class="card-head"><h3>Invoices</h3></div>
+          <div class="card-body stack">${w.invoices.map((i) => `<div class="spread">
+            <span class="mono">${esc(i.number)}</span>
+            <span>${money(i.total)} <span class="badge status ${i.status === "paid" ? "ready" : "quote_pending"}">${esc(i.status)}</span>
+            <button class="btn btn-ghost btn-sm" data-inv="${i.id}">⬇ PDF</button></span></div>`).join("")}</div></div>` : ""}
+        ${(w.attachments || []).length ? `<div class="card"><div class="card-head"><h3>Photos &amp; reports</h3></div>
+          <div class="card-body stack">${w.attachments.map((a) => `<button class="btn btn-ghost btn-sm" data-att="${a.id}" style="justify-content:flex-start">
+            ${({photo:"📷",nameplate:"🔖",report:"📊",document:"📄"})[a.kind] || "📎"} ${esc(a.filename)}</button>`).join("")}</div></div>` : ""}
       </div>
     </div>`;
 
   const ap = el("#approveBtn"), rj = el("#rejectBtn");
-  if (ap) ap.addEventListener("click", () => decide(pendingQuote.id, true, id));
-  if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id));
+  if (ap) ap.addEventListener("click", () => decide(pendingQuote.id, true, id, overLimit));
+  if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id, false));
+  const wd = el("#withdrawBtn");
+  if (wd) wd.addEventListener("click", () => withdraw(id));
+  els("[data-inv]").forEach((b) =>
+    b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
+  els("[data-att]").forEach((b) =>
+    b.addEventListener("click", () => openAttachment(b.dataset.att).catch((e) => toast(e.message, "err"))));
 }
 
 function bigTracker(status) {
@@ -129,7 +210,7 @@ function bigTracker(status) {
     </div>`).join("")}</div>`;
 }
 
-function quoteApprovalCard(q, w) {
+function quoteApprovalCard(q, w, overLimit, limit) {
   const lines = q.lines.map((l) => `<div class="spread" style="padding:4px 0;font-size:.9rem">
     <span>${esc(l.description)} <span class="muted">×${l.quantity}</span></span><span class="mono">${money(l.line_total)}</span></div>`).join("");
   return `<div class="card" style="border:2px solid var(--accent-500);margin-bottom:18px">
@@ -140,22 +221,27 @@ function quoteApprovalCard(q, w) {
       <div class="spread"><span class="muted">Tax</span><span class="mono">${money(q.tax)}</span></div>
       <div class="spread" style="font-size:1.1rem"><strong>Total</strong><strong class="mono">${money(q.total)}</strong></div>
       ${q.valid_until ? `<p class="muted" style="font-size:.82rem;margin-top:8px">Valid until ${fmtDate(q.valid_until)}</p>` : ""}
+      ${overLimit ? `<div class="badge status on_hold" style="margin-top:10px">⚠ This exceeds your standing approval limit of ${money(limit)} — a PO number is required to approve.</div>` : ""}
       <div class="row" style="justify-content:flex-end;margin-top:14px">
         <button class="btn btn-danger" id="rejectBtn">Decline</button>
         <button class="btn btn-success" id="approveBtn">✓ Approve &amp; authorize repair</button></div></div></div>`;
 }
 
-async function decide(quoteId, approve, woId) {
+async function decide(quoteId, approve, woId, requirePo) {
   const m = modal(`<div class="card-head"><h3>${approve ? "Approve quote" : "Decline quote"}</h3></div>
     <div class="card-body stack">
       <p class="muted">${approve ? "This authorizes the service center to begin the repair." : "Let the service center know why you're declining (optional)."}</p>
+      ${approve && requirePo ? `<label class="field"><span>PO number <span style="color:var(--danger)">*</span> (required — exceeds your approval limit)</span>
+        <input id="dpo" placeholder="e.g. 4500012345" /></label>` : ""}
       <label class="field"><span>Note (optional)</span><textarea id="dn"></textarea></label>
       <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="dc">Cancel</button>
         <button class="btn ${approve ? "btn-success" : "btn-danger"}" id="dok">${approve ? "Approve" : "Decline"}</button></div></div>`);
   el("#dc", m.root).onclick = m.close;
   el("#dok", m.root).onclick = async () => {
+    const po = el("#dpo", m.root)?.value.trim();
+    if (approve && requirePo && !po) return toast("A PO number is required to approve this quote.", "err");
     try {
-      await api.decideQuote(quoteId, approve, el("#dn", m.root).value.trim() || null);
+      await api.decideQuote(quoteId, approve, el("#dn", m.root).value.trim() || null, po || null);
       m.close(); toast(approve ? "Quote approved — thank you!" : "Quote declined.", approve ? "ok" : "");
       renderDetail(woId);
     } catch (ex) { toast(ex.message, "err"); }
@@ -182,4 +268,28 @@ async function renderEquipment() {
     </div>`;
 }
 
-boot();
+/* ---------- invoices ---------- */
+async function renderInvoices() {
+  loading();
+  const list = await api.portalInvoices();
+  const due = list.filter((i) => i.status !== "paid").reduce((s, i) => s + i.total, 0);
+  view.innerHTML = `
+    <div class="page-title"><h1>My invoices</h1>
+      ${due ? `<div class="stat warn" style="padding:10px 16px"><div class="stat-label">Balance due</div>
+        <div class="stat-value" style="font-size:1.4rem">${money(due)}</div></div>` : ""}</div>
+    <div class="card"><div class="table-wrap"><table class="data">
+      <thead><tr><th>Invoice #</th><th>Status</th><th class="text-right">Total</th><th>Due</th><th></th></tr></thead>
+      <tbody>${list.map((i) => `<tr data-nostyle>
+        <td class="mono">${esc(i.number)}</td>
+        <td><span class="badge status ${i.status === "paid" ? "ready" : "quote_pending"}">${esc(i.status)}</span></td>
+        <td class="text-right mono">${money(i.total)}</td>
+        <td class="muted nowrap">${fmtDate(i.due_date)}</td>
+        <td class="text-right"><button class="btn btn-ghost btn-sm" data-inv="${i.id}">⬇ Download PDF</button></td></tr>`).join("") ||
+      '<tr><td colspan="5" class="muted" style="text-align:center;padding:24px">No invoices yet.</td></tr>'}
+      </tbody></table></div></div>`;
+  els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
+  els("[data-inv]").forEach((b) =>
+    b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
+}
+
+if (_authed) boot();

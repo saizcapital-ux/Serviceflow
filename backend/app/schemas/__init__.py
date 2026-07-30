@@ -9,6 +9,9 @@ from app.models.enums import (
     EquipmentType,
     EventType,
     FindingSeverity,
+    InvoiceStatus,
+    NotificationChannel,
+    NotificationStatus,
     Priority,
     QuoteStatus,
     ServiceType,
@@ -43,8 +46,29 @@ class UserOut(ORMModel):
 
 
 # ---------- Customers ----------
+class LocationCreate(BaseModel):
+    name: str
+    code: str
+    address: str | None = None
+
+
+class LocationOut(ORMModel):
+    id: int
+    name: str
+    code: str
+    address: str | None = None
+    is_active: bool
+
+
 class ContactOut(ORMModel):
     id: int
+    name: str
+    title: str | None = None
+    email: str | None = None
+    phone: str | None = None
+
+
+class ContactCreate(BaseModel):
     name: str
     title: str | None = None
     email: str | None = None
@@ -58,6 +82,7 @@ class CustomerBase(BaseModel):
     phone: str | None = None
     billing_address: str | None = None
     shipping_address: str | None = None
+    approval_limit: float | None = None
 
 
 class CustomerCreate(CustomerBase):
@@ -74,6 +99,7 @@ class CustomerOut(ORMModel, CustomerBase):
 # ---------- Equipment ----------
 class EquipmentBase(BaseModel):
     customer_id: int
+    location_id: int | None = None
     tag: str | None = None
     equipment_type: EquipmentType = EquipmentType.other
     manufacturer: str | None = None
@@ -96,10 +122,12 @@ class EquipmentOut(ORMModel, EquipmentBase):
 class WorkOrderCreate(BaseModel):
     customer_id: int
     equipment_id: int | None = None
+    location_id: int | None = None
     service_type: ServiceType = ServiceType.shop_repair
     priority: Priority = Priority.normal
     title: str
     problem_description: str | None = None
+    po_number: str | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     promised_date: date | None = None
@@ -109,6 +137,8 @@ class WorkOrderUpdate(BaseModel):
     priority: Priority | None = None
     title: str | None = None
     problem_description: str | None = None
+    po_number: str | None = None
+    location_id: int | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     promised_date: date | None = None
@@ -174,6 +204,259 @@ class QuoteOut(ORMModel):
 class QuoteDecision(BaseModel):
     approve: bool
     note: str | None = None
+    po_number: str | None = None
+
+
+class ServiceRequestCreate(BaseModel):
+    """A repair request submitted by a customer through the portal."""
+    equipment_id: int | None = None
+    title: str
+    problem_description: str | None = None
+    priority: Priority = Priority.normal
+    po_number: str | None = None
+
+
+class InvoiceLineOut(ORMModel):
+    id: int
+    kind: str
+    description: str
+    quantity: float
+    unit_price: float
+    line_total: float
+
+
+class InvoiceOut(ORMModel):
+    id: int
+    number: str
+    status: InvoiceStatus
+    subtotal: float
+    tax: float
+    total: float
+    notes: str | None = None
+    due_date: date | None = None
+    issued_at: datetime
+    paid_at: datetime | None = None
+    work_order_id: int
+    customer_id: int
+    lines: list[InvoiceLineOut] = []
+
+
+class InvoiceCreate(BaseModel):
+    """Create an invoice from the work order's approved quote (or all approved lines)."""
+    quote_id: int | None = None  # defaults to the most recent approved quote
+    due_in_days: int = 30
+    notes: str | None = None
+
+
+class MarkPaid(BaseModel):
+    paid: bool = True
+
+
+class PartBase(BaseModel):
+    sku: str
+    name: str
+    description: str | None = None
+    unit_cost: float = 0.0
+    unit_price: float = 0.0
+    quantity_on_hand: int = 0
+    reorder_point: int = 0
+    location: str | None = None
+
+
+class PartCreate(PartBase):
+    pass
+
+
+class PartUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    unit_cost: float | None = None
+    unit_price: float | None = None
+    quantity_on_hand: int | None = None
+    reorder_point: int | None = None
+    location: str | None = None
+
+
+class PartOut(ORMModel, PartBase):
+    id: int
+    is_active: bool
+    created_at: datetime
+
+
+class PartAdjust(BaseModel):
+    delta: int  # +receive / -consume/scrap
+    reason: str | None = None
+
+
+class PartUsageCreate(BaseModel):
+    part_id: int
+    quantity: int = Field(gt=0)
+
+
+class PartUsageOut(ORMModel):
+    id: int
+    part_id: int
+    quantity: int
+    unit_price: float
+    created_at: datetime
+
+
+class ChecklistTemplateCreate(BaseModel):
+    name: str
+    equipment_type: EquipmentType | None = None
+    items: list[str]
+
+
+class ChecklistTemplateOut(ORMModel):
+    id: int
+    name: str
+    equipment_type: EquipmentType | None = None
+    items: list[str]
+
+
+class ChecklistItemOut(ORMModel):
+    id: int
+    label: str
+    is_done: bool
+    note: str | None = None
+    position: int
+
+
+class ChecklistItemUpdate(BaseModel):
+    is_done: bool | None = None
+    note: str | None = None
+
+
+class ApplyTemplate(BaseModel):
+    template_id: int
+
+
+class ApiKeyOut(ORMModel):
+    id: int
+    name: str
+    prefix: str
+    is_active: bool
+    last_used_at: datetime | None = None
+    created_at: datetime
+
+
+class ApiKeyCreate(BaseModel):
+    name: str
+
+
+class ApiKeyCreated(ApiKeyOut):
+    key: str  # full key, shown only once
+
+
+class WebhookCreate(BaseModel):
+    url: str
+    events: list[str] = ["*"]
+
+
+class WebhookDeliveryOut(ORMModel):
+    id: int
+    event: str
+    status_code: int | None = None
+    success: bool
+    error: str | None = None
+    created_at: datetime
+
+
+class WebhookOut(ORMModel):
+    id: int
+    url: str
+    events: list[str]
+    is_active: bool
+    created_at: datetime
+
+
+class AuditLogOut(ORMModel):
+    id: int
+    actor_label: str
+    action: str
+    entity_type: str | None = None
+    entity_id: int | None = None
+    summary: str
+    created_at: datetime
+
+
+class NotificationOut(ORMModel):
+    id: int
+    channel: NotificationChannel
+    recipient: str
+    subject: str
+    status: NotificationStatus
+    work_order_id: int | None = None
+    customer_id: int | None = None
+    created_at: datetime
+    sent_at: datetime | None = None
+
+
+class AttachmentOut(ORMModel):
+    id: int
+    work_order_id: int
+    filename: str
+    content_type: str | None = None
+    kind: str
+    created_at: datetime
+
+
+class TimeEntryCreate(BaseModel):
+    hours: float = Field(gt=0)
+    note: str | None = None
+    worked_on: date | None = None
+    user_id: int | None = None  # defaults to the logged-in technician
+
+
+class TimeEntryOut(ORMModel):
+    id: int
+    work_order_id: int
+    user_id: int
+    hours: float
+    note: str | None = None
+    worked_on: date
+
+
+class CostingSummary(BaseModel):
+    logged_hours: float
+    labor_rate: float
+    labor_cost: float
+    estimate: float           # approved quote total (revenue)
+    invoiced: float
+    margin: float             # estimate - labor_cost
+    margin_pct: float | None  # margin / estimate
+
+
+class PlanOut(BaseModel):
+    id: str
+    name: str
+    price_monthly: int
+    seats: int
+    features: list[str]
+
+
+class SubscriptionOut(ORMModel):
+    plan: str
+    subscription_status: str
+    seats: int
+    trial_ends_at: datetime | None = None
+    current_period_end: datetime | None = None
+
+
+class CheckoutRequest(BaseModel):
+    plan_id: str
+
+
+class UserSummary(ORMModel):
+    id: int
+    full_name: str
+    role: UserRole
+
+
+class ScheduleRequest(BaseModel):
+    scheduled_at: datetime
+    assigned_to: int | None = None
+    notify_customer: bool = True
 
 
 class WorkOrderSummary(ORMModel):
@@ -185,6 +468,9 @@ class WorkOrderSummary(ORMModel):
     service_type: ServiceType
     customer_id: int
     equipment_id: int | None = None
+    location_id: int | None = None
+    assigned_to: int | None = None
+    scheduled_at: datetime | None = None
     promised_date: date | None = None
     total_estimate: float
     created_at: datetime
@@ -193,6 +479,7 @@ class WorkOrderSummary(ORMModel):
 
 class WorkOrderDetail(WorkOrderSummary):
     problem_description: str | None = None
+    po_number: str | None = None
     assigned_to: int | None = None
     scheduled_at: datetime | None = None
     total_actual: float
@@ -201,6 +488,11 @@ class WorkOrderDetail(WorkOrderSummary):
     events: list[EventOut] = []
     findings: list[FindingOut] = []
     quotes: list[QuoteOut] = []
+    invoices: list[InvoiceOut] = []
+    time_entries: list[TimeEntryOut] = []
+    attachments: list[AttachmentOut] = []
+    parts_used: list[PartUsageOut] = []
+    checklist_items: list[ChecklistItemOut] = []
 
 
 # ---------- Dashboard ----------
@@ -215,6 +507,8 @@ class DashboardStats(BaseModel):
     awaiting_approval: int
     ready_to_ship: int
     field_visits_scheduled: int
+    overdue_open: int
+    due_soon_open: int
     by_status: list[StatusCount]
     recent: list[WorkOrderSummary]
 

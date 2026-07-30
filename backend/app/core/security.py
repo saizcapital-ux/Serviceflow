@@ -1,4 +1,6 @@
-"""Security primitives: password hashing and JWT tokens."""
+"""Security primitives: password hashing, JWT tokens, and API keys."""
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 
 import jwt
@@ -7,6 +9,17 @@ from passlib.context import CryptContext
 from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_api_key(key: str) -> str:
+    """API keys are high-entropy, so a fast SHA-256 (not bcrypt) is appropriate."""
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
+def generate_api_key() -> tuple[str, str, str]:
+    """Return (full_key, prefix, hashed_key). The full key is shown to the user once."""
+    full = "sf_" + secrets.token_urlsafe(32)
+    return full, full[:11], hash_api_key(full)
 
 
 def hash_password(password: str) -> str:

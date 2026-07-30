@@ -1,12 +1,22 @@
 """Customer & equipment management (staff only)."""
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_staff
+from app.core.config import settings
 from app.core.database import get_db
-from app.models import Customer, Equipment, User
-from app.schemas import CustomerCreate, CustomerOut, EquipmentCreate, EquipmentOut
+from app.models import Contact, Customer, Equipment, User
+from app.schemas import (
+    ContactCreate,
+    ContactOut,
+    CustomerCreate,
+    CustomerOut,
+    EquipmentCreate,
+    EquipmentOut,
+)
+from app.services.qr import qr_svg
 
 router = APIRouter(prefix="/api", tags=["customers"])
 
@@ -58,9 +68,24 @@ def get_customer(customer_id: int, db: Session = Depends(get_db), user: User = D
     return customer
 
 
+@router.post("/customers/{customer_id}/contacts", response_model=ContactOut, status_code=status.HTTP_201_CREATED)
+def add_contact(customer_id: int, payload: ContactCreate, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    customer = db.scalar(
+        select(Customer).where(Customer.id == customer_id, Customer.organization_id == user.organization_id)
+    )
+    if not customer:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Customer not found.")
+    contact = Contact(customer_id=customer_id, **payload.model_dump())
+    db.add(contact)
+    db.commit()
+    db.refresh(contact)
+    return contact
+
+
 @router.get("/equipment", response_model=list[EquipmentOut])
 def list_equipment(
     customer_id: int | None = None,
+    location_id: int | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
 ):
@@ -69,6 +94,8 @@ def list_equipment(
     )
     if customer_id:
         stmt = stmt.where(Equipment.customer_id == customer_id)
+    if location_id:
+        stmt = stmt.where(Equipment.location_id == location_id)
     return db.scalars(stmt.order_by(Equipment.created_at.desc())).all()
 
 
@@ -100,3 +127,17 @@ def get_equipment(equipment_id: int, db: Session = Depends(get_db), user: User =
     if not equipment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
     return equipment
+
+
+@router.get("/equipment/{equipment_id}/qr.svg")
+def equipment_qr(equipment_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """SVG QR code that deep-links to this asset (scan to open its history)."""
+    equipment = db.scalar(
+        select(Equipment).where(
+            Equipment.id == equipment_id, Equipment.organization_id == user.organization_id
+        )
+    )
+    if not equipment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
+    url = f"{settings.app_base_url}/app/#/equipment/{equipment_id}"
+    return Response(content=qr_svg(url), media_type="image/svg+xml")

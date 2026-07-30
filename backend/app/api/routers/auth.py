@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import create_access_token, verify_password
 from app.models import User
 from app.schemas import LoginRequest, TokenResponse, UserOut
+from app.services import audit
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -25,6 +26,9 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """JSON login used by the SPA."""
     user = _authenticate(db, payload.email, payload.password)
     token = create_access_token(user.id, {"role": user.role.value, "org": user.organization_id})
+    audit.record(db, organization_id=user.organization_id, actor=user, action="user.login",
+                 summary=f"{user.full_name} signed in", entity_type="user", entity_id=user.id)
+    db.commit()
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
 
