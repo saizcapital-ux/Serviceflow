@@ -1,0 +1,12 @@
+# Netlify configuration for the Serviceflow frontend.
+#
+# The app is a static HTML/CSS/JS client that lives in `frontend/`. Without
+# this file Netlify publishes the repository root, which has no index.html —
+# so the site root returns "Page not found". Pointing the publish directory at
+# `frontend/` serves the real app (landing page, login, staff app, portal).
+#
+# There is no build step: the client ships as-is (ES modules, no bundler).
+
+[build]
+  publish = "frontend"
+  command = ""
