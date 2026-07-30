@@ -57,13 +57,56 @@ async function renderOrders() {
         ${w.status === "quote_pending" ? '<span class="badge status quote_pending">Action needed</span>' : ""}
       </div></div>`;
   view.innerHTML = `
-    <div class="page-title"><h1>My repairs</h1></div>
+    <div class="page-title"><h1>My repairs</h1>
+      <button class="btn btn-primary" id="requestBtn">＋ Request service</button></div>
     ${open.length ? `<h3 class="muted" style="text-transform:uppercase;font-size:.8rem;letter-spacing:.05em">Active (${open.length})</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr));margin-bottom:24px">${open.map(card).join("")}</div>` :
-      '<div class="empty"><div class="big">✅</div>No active repairs right now.</div>'}
+      '<div class="empty"><div class="big">🔧</div>No active repairs right now.<div style="margin-top:12px"><button class="btn btn-primary" id="requestBtnEmpty">＋ Request service</button></div></div>'}
     ${history.length ? `<h3 class="muted" style="text-transform:uppercase;font-size:.8rem;letter-spacing:.05em">History (${history.length})</h3>
       <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${history.map(card).join("")}</div>` : ""}`;
   els("[data-wo]").forEach((c) => c.addEventListener("click", () => (location.hash = `#/orders/${c.dataset.wo}`)));
+  ["#requestBtn", "#requestBtnEmpty"].forEach((sel) => { const b = el(sel); if (b) b.addEventListener("click", openServiceRequest); });
+}
+
+/* ---------- new service request ---------- */
+async function openServiceRequest() {
+  let equipment = [];
+  try { equipment = await api.portalEquipment(); } catch { /* proceed without list */ }
+  const eqOptions = ['<option value="">— Not sure / not listed —</option>']
+    .concat(equipment.map((e) => `<option value="${e.id}">${esc(e.tag || TYPE_LABEL[e.equipment_type])} · ${esc(e.manufacturer || "")} ${esc(e.model || "")}</option>`))
+    .join("");
+  const m = modal(`<div class="card-head"><h3>Request service</h3></div>
+    <div class="card-body stack">
+      <p class="muted">Tell us what needs repair. Your service center receives it immediately and will confirm receipt and inspection.</p>
+      <label class="field"><span>Equipment</span><select id="srEq">${eqOptions}</select></label>
+      <label class="field"><span>What's the problem? <span style="color:var(--danger)">*</span></span>
+        <input id="srTitle" placeholder="e.g. Motor tripping on overload / bearing noise" /></label>
+      <label class="field"><span>Details (symptoms, when it started, operating conditions)</span>
+        <textarea id="srDesc" rows="4"></textarea></label>
+      <div class="row" style="gap:12px">
+        <label class="field" style="flex:1"><span>Priority</span><select id="srPrio">
+          <option value="normal">Normal</option><option value="high">High</option>
+          <option value="rush">Rush — line down</option><option value="low">Low</option></select></label>
+        <label class="field" style="flex:1"><span>PO number (optional)</span><input id="srPo" placeholder="e.g. 4500012345" /></label>
+      </div>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="srCancel">Cancel</button>
+        <button class="btn btn-primary" id="srSubmit">Submit request</button></div></div>`);
+  el("#srCancel", m.root).onclick = m.close;
+  el("#srSubmit", m.root).onclick = async () => {
+    const title = el("#srTitle", m.root).value.trim();
+    if (!title) return toast("Please describe the problem.", "err");
+    try {
+      const wo = await api.createServiceRequest({
+        equipment_id: el("#srEq", m.root).value ? Number(el("#srEq", m.root).value) : null,
+        title,
+        problem_description: el("#srDesc", m.root).value.trim() || null,
+        priority: el("#srPrio", m.root).value,
+        po_number: el("#srPo", m.root).value.trim() || null,
+      });
+      m.close(); toast(`Request ${wo.number} submitted — thank you!`, "ok");
+      location.hash = `#/orders/${wo.id}`;
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function miniTracker(status) {

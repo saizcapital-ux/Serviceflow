@@ -207,6 +207,15 @@ class QuoteDecision(BaseModel):
     po_number: str | None = None
 
 
+class ServiceRequestCreate(BaseModel):
+    """A repair request submitted by a customer through the portal."""
+    equipment_id: int | None = None
+    title: str
+    problem_description: str | None = None
+    priority: Priority = Priority.normal
+    po_number: str | None = None
+
+
 class InvoiceLineOut(ORMModel):
     id: int
     kind: str

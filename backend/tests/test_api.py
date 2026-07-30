@@ -34,6 +34,51 @@ def test_portal_only_sees_own_work_orders(client, portal_headers):
     assert "WO-2026-0003" not in numbers
 
 
+def test_portal_service_request_creates_intake_work_order(client, portal_headers):
+    eq = client.get("/api/portal/equipment", headers=portal_headers).json()
+    r = client.post(
+        "/api/portal/service-requests",
+        headers=portal_headers,
+        json={
+            "equipment_id": eq[0]["id"],
+            "title": "Bearing noise on drive end",
+            "problem_description": "Grinding noise started this morning.",
+            "priority": "high",
+            "po_number": "PO-SELF-1",
+        },
+    )
+    assert r.status_code == 201, r.text
+    wo = r.json()
+    assert wo["status"] == "intake"
+    assert wo["number"].startswith("WO-")
+    assert wo["priority"] == "high"
+    assert wo["po_number"] == "PO-SELF-1"
+    assert wo["equipment_id"] == eq[0]["id"]
+    # A customer-visible intake event is recorded.
+    assert any("portal" in (e.get("message") or "").lower() for e in wo["events"])
+    # It now shows up in the customer's own list.
+    numbers = {w["number"] for w in client.get("/api/portal/work-orders", headers=portal_headers).json()}
+    assert wo["number"] in numbers
+
+
+def test_portal_service_request_rejects_foreign_equipment(client, portal_headers):
+    r = client.post(
+        "/api/portal/service-requests",
+        headers=portal_headers,
+        json={"equipment_id": 999999, "title": "Bad equipment ref"},
+    )
+    assert r.status_code == 404
+
+
+def test_service_request_requires_portal_role(client, staff_headers):
+    r = client.post(
+        "/api/portal/service-requests",
+        headers=staff_headers,
+        json={"title": "Staff should not use portal intake"},
+    )
+    assert r.status_code == 403
+
+
 def test_create_work_order_and_advance_status(client, staff_headers):
     customers = client.get("/api/customers", headers=staff_headers).json()
     cid = customers[0]["id"]

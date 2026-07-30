@@ -115,6 +115,8 @@ export const api = {
   portalEquipment: () => request("/api/portal/equipment"),
   decideQuote: (quoteId, approve, note, poNumber) =>
     request(`/api/portal/quotes/${quoteId}/decision`, { method: "POST", body: { approve, note, po_number: poNumber || null } }),
+  createServiceRequest: (body) =>
+    request("/api/portal/service-requests", { method: "POST", body }),
 };
 
 /** Fetch an authenticated binary endpoint and open it in a new tab (blob URL). */

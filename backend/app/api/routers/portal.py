@@ -5,13 +5,25 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
-from app.models import Equipment, Invoice, Quote, User, UserRole, WorkOrder
+from app.models import (
+    Equipment,
+    EventType,
+    Invoice,
+    Quote,
+    ServiceType,
+    User,
+    UserRole,
+    WorkOrder,
+    WorkOrderEvent,
+    WorkOrderStatus,
+)
 from app.schemas import (
     EquipmentOut,
     EventOut,
     InvoiceOut,
     QuoteDecision,
     QuoteOut,
+    ServiceRequestCreate,
     WorkOrderDetail,
     WorkOrderSummary,
 )
@@ -116,3 +128,64 @@ def decide_quote(
     db.commit()
     db.refresh(quote)
     return quote
+
+
+@router.post("/service-requests", response_model=WorkOrderDetail, status_code=status.HTTP_201_CREATED)
+def create_service_request(
+    payload: ServiceRequestCreate, db: Session = Depends(get_db), user: User = Depends(require_portal)
+):
+    """Customer-submitted repair request → a new work order at intake for the shop."""
+    if payload.equipment_id is not None:
+        eq = db.scalar(
+            select(Equipment).where(
+                Equipment.id == payload.equipment_id,
+                Equipment.organization_id == user.organization_id,
+                Equipment.customer_id == user.customer_id,
+            )
+        )
+        if not eq:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
+    number = workflow.next_work_order_number(db, user.organization_id)
+    wo = WorkOrder(
+        organization_id=user.organization_id,
+        number=number,
+        customer_id=user.customer_id,
+        equipment_id=payload.equipment_id,
+        service_type=ServiceType.shop_repair,
+        status=WorkOrderStatus.intake,
+        priority=payload.priority,
+        title=payload.title,
+        problem_description=payload.problem_description,
+        po_number=payload.po_number,
+    )
+    db.add(wo)
+    db.flush()
+    db.add(
+        WorkOrderEvent(
+            work_order_id=wo.id,
+            event_type=EventType.status_change,
+            to_status=WorkOrderStatus.intake,
+            message=f"Service request submitted by customer via portal — {number} received at intake.",
+            created_by=user.id,
+            visible_to_customer=True,
+        )
+    )
+    audit.record(db, organization_id=user.organization_id, actor=user, action="service_request.created",
+                 summary=f"Customer submitted service request {number} — {wo.title}",
+                 entity_type="work_order", entity_id=wo.id)
+    db.commit()
+    wo = db.scalar(
+        select(WorkOrder)
+        .where(WorkOrder.id == wo.id)
+        .options(
+            selectinload(WorkOrder.customer),
+            selectinload(WorkOrder.equipment),
+            selectinload(WorkOrder.events),
+            selectinload(WorkOrder.findings),
+            selectinload(WorkOrder.quotes).selectinload(Quote.lines),
+            selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
+            selectinload(WorkOrder.attachments),
+        )
+    )
+    wo.events = [e for e in wo.events if e.visible_to_customer]
+    return wo
