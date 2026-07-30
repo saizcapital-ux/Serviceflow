@@ -72,6 +72,8 @@ A pragmatic path from the current MVP to a sellable, scalable SaaS.
 
 - Move frontend to Vite + React when interactivity demands it (API contract and
   design tokens already carry over)
-- Structured logging, request IDs, error tracking (Sentry)
-- Rate limiting and refresh tokens (password reset & invite flows ✅ delivered in v4)
+- ✅ Structured access logging + per-request IDs (`X-Request-ID`); error
+  tracking (Sentry) still open
+- ✅ Login/reset **rate limiting** (DB-backed sliding window, per client IP);
+  refresh tokens still open (password reset & invite flows ✅ delivered in v4)
 - Containerization (Docker) + IaC; managed Postgres; automated backups

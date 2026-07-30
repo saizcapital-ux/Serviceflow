@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     # CORS — comma-separated origins, or "*" for dev.
     cors_origins: str = "*"
 
+    # Login throttling: block an IP after N failed auth attempts in the window.
+    login_rate_limit_max: int = 10
+    login_rate_limit_window_min: int = 15
+
     # File storage — "local" (default) or "s3". Local files live under storage_dir.
     storage_backend: str = "local"
     storage_dir: str = "./uploads"

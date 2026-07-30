@@ -496,3 +496,19 @@ class PasswordResetToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LoginAttempt(Base):
+    """One row per authentication attempt, used for sliding-window rate limiting.
+
+    Not tenant-scoped: login happens before we know the org, so attempts are
+    keyed by client IP (and the attempted email, for diagnostics).
+    """
+
+    __tablename__ = "login_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    ip: Mapped[str] = mapped_column(String(64), index=True)
+    email: Mapped[str | None] = mapped_column(String(255))
+    successful: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)

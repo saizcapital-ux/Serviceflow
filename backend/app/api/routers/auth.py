@@ -1,13 +1,14 @@
 """Authentication endpoints."""
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.ratelimit import client_ip, enforce_login_rate_limit, record_attempt
 from app.core.security import (
     create_access_token,
     generate_token,
@@ -38,9 +39,16 @@ def _authenticate(db: Session, email: str, password: str) -> User:
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     """JSON login used by the SPA."""
-    user = _authenticate(db, payload.email, payload.password)
+    ip = client_ip(request)
+    enforce_login_rate_limit(db, ip)
+    try:
+        user = _authenticate(db, payload.email, payload.password)
+    except HTTPException:
+        record_attempt(db, ip, payload.email, successful=False)
+        raise
+    record_attempt(db, ip, payload.email, successful=True)
     token = create_access_token(user.id, {"role": user.role.value, "org": user.organization_id})
     audit.record(db, organization_id=user.organization_id, actor=user, action="user.login",
                  summary=f"{user.full_name} signed in", entity_type="user", entity_id=user.id)
@@ -49,9 +57,16 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/token", response_model=TokenResponse)
-def login_form(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login_form(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """OAuth2 form login so the Swagger 'Authorize' button works."""
-    user = _authenticate(db, form.username, form.password)
+    ip = client_ip(request)
+    enforce_login_rate_limit(db, ip)
+    try:
+        user = _authenticate(db, form.username, form.password)
+    except HTTPException:
+        record_attempt(db, ip, form.username, successful=False)
+        raise
+    record_attempt(db, ip, form.username, successful=True)
     token = create_access_token(user.id, {"role": user.role.value, "org": user.organization_id})
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
@@ -62,9 +77,11 @@ def me(user: User = Depends(get_current_user)):
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
-def forgot_password(payload: ForgotPasswordRequest, db: Session = Depends(get_db)):
+def forgot_password(payload: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
     """Start a password reset. Always returns 202 so we never reveal whether an
     email is registered."""
+    # An IP already throttled for failed logins can't pivot to reset-email spam.
+    enforce_login_rate_limit(db, client_ip(request))
     user = db.scalar(select(User).where(User.email == payload.email.lower(), User.is_active.is_(True)))
     if user:
         raw_token = generate_token()
