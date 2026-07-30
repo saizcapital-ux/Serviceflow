@@ -84,6 +84,42 @@ def test_service_request_requires_portal_role(client, staff_headers):
     assert r.status_code == 403
 
 
+def test_portal_withdraw_request_at_intake(client, portal_headers):
+    created = client.post(
+        "/api/portal/service-requests",
+        headers=portal_headers,
+        json={"title": "Withdraw me — motor won't start"},
+    ).json()
+    r = client.post(f"/api/portal/work-orders/{created['id']}/withdraw", headers=portal_headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "cancelled"
+    # A second withdraw is rejected — no longer at intake.
+    again = client.post(f"/api/portal/work-orders/{created['id']}/withdraw", headers=portal_headers)
+    assert again.status_code == 409
+
+
+def test_portal_cannot_withdraw_after_work_begins(client, staff_headers, portal_headers):
+    created = client.post(
+        "/api/portal/service-requests",
+        headers=portal_headers,
+        json={"title": "Started — cannot withdraw"},
+    ).json()
+    # Staff move it out of intake.
+    adv = client.post(f"/api/work-orders/{created['id']}/status", headers=staff_headers,
+                      json={"status": "inspection"})
+    assert adv.status_code == 200
+    r = client.post(f"/api/portal/work-orders/{created['id']}/withdraw", headers=portal_headers)
+    assert r.status_code == 409
+
+
+def test_portal_cannot_withdraw_others_work_order(client, staff_headers, portal_headers):
+    # A Gulf Coast job (WO-2026-0003) is not Acme's — must 404 for Acme's portal user.
+    gulf = next(w for w in client.get("/api/work-orders", headers=staff_headers).json()
+                if w["number"] == "WO-2026-0003")
+    r = client.post(f"/api/portal/work-orders/{gulf['id']}/withdraw", headers=portal_headers)
+    assert r.status_code == 404
+
+
 def test_create_work_order_and_advance_status(client, staff_headers):
     customers = client.get("/api/customers", headers=staff_headers).json()
     cid = customers[0]["id"]

@@ -192,3 +192,54 @@ def create_service_request(
     )
     wo.events = [e for e in wo.events if e.visible_to_customer]
     return wo
+
+
+@router.post("/work-orders/{wo_id}/withdraw", response_model=WorkOrderDetail)
+def withdraw_work_order(
+    wo_id: int, db: Session = Depends(get_db), user: User = Depends(require_portal)
+):
+    """Customer withdraws their own request — allowed only while still at intake."""
+    wo = db.scalar(
+        select(WorkOrder).where(
+            WorkOrder.id == wo_id,
+            WorkOrder.organization_id == user.organization_id,
+            WorkOrder.customer_id == user.customer_id,
+        )
+    )
+    if not wo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Work order not found.")
+    if wo.status != WorkOrderStatus.intake:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This request is already being worked on and can no longer be withdrawn online — "
+            "please contact the service center.",
+        )
+    try:
+        workflow.transition_status(
+            db, wo, WorkOrderStatus.cancelled, user_id=user.id,
+            message="Request withdrawn by the customer before work began.",
+            visible_to_customer=True,
+        )
+    except workflow.TransitionError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    audit.record(db, organization_id=user.organization_id, actor=user, action="service_request.withdrawn",
+                 summary=f"Customer withdrew request {wo.number}",
+                 entity_type="work_order", entity_id=wo.id)
+    customer = db.get(Customer, user.customer_id)
+    notifications.notify_staff_request_withdrawn(db, wo, customer.name if customer else user.full_name)
+    db.commit()
+    fresh = db.scalar(
+        select(WorkOrder)
+        .where(WorkOrder.id == wo.id)
+        .options(
+            selectinload(WorkOrder.customer),
+            selectinload(WorkOrder.equipment),
+            selectinload(WorkOrder.events),
+            selectinload(WorkOrder.findings),
+            selectinload(WorkOrder.quotes).selectinload(Quote.lines),
+            selectinload(WorkOrder.invoices).selectinload(Invoice.lines),
+            selectinload(WorkOrder.attachments),
+        )
+    )
+    fresh.events = [e for e in fresh.events if e.visible_to_customer]
+    return fresh

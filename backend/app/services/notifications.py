@@ -112,8 +112,8 @@ def notify_customer_status(db: Session, wo: WorkOrder, message: str) -> None:
 _INTAKE_ROLES = (UserRole.owner, UserRole.manager, UserRole.service_writer)
 
 
-def notify_staff_new_request(db: Session, wo: WorkOrder, customer_name: str) -> None:
-    """Email the shop's intake staff that a customer submitted a new service request."""
+def _notify_intake_staff(db: Session, wo: WorkOrder, subject: str, body: str) -> None:
+    """Fan a notification out to every active intake-role user in the org."""
     staff = db.scalars(
         select(User).where(
             User.organization_id == wo.organization_id,
@@ -121,13 +121,6 @@ def notify_staff_new_request(db: Session, wo: WorkOrder, customer_name: str) -> 
             User.is_active.is_(True),
         )
     ).all()
-    subject = f"New service request {wo.number} from {customer_name}"
-    body = (
-        f"A customer submitted a repair request through the portal:\n\n"
-        f"  Work order: {wo.number}\n  Customer:   {customer_name}\n"
-        f"  Priority:   {wo.priority.value}\n  Problem:    {wo.title}\n\n"
-        f"It's waiting at intake in Serviceflow — review and schedule the inspection.\n"
-    )
     for member in staff:
         if not member.email:
             continue
@@ -135,6 +128,29 @@ def notify_staff_new_request(db: Session, wo: WorkOrder, customer_name: str) -> 
             db, organization_id=wo.organization_id, customer_id=wo.customer_id, work_order_id=wo.id,
             recipient=member.email, subject=subject, body=body,
         )
+
+
+def notify_staff_new_request(db: Session, wo: WorkOrder, customer_name: str) -> None:
+    """Email the shop's intake staff that a customer submitted a new service request."""
+    _notify_intake_staff(
+        db, wo,
+        subject=f"New service request {wo.number} from {customer_name}",
+        body=(f"A customer submitted a repair request through the portal:\n\n"
+              f"  Work order: {wo.number}\n  Customer:   {customer_name}\n"
+              f"  Priority:   {wo.priority.value}\n  Problem:    {wo.title}\n\n"
+              f"It's waiting at intake in Serviceflow — review and schedule the inspection.\n"),
+    )
+
+
+def notify_staff_request_withdrawn(db: Session, wo: WorkOrder, customer_name: str) -> None:
+    """Email the shop's intake staff that a customer withdrew a request before work began."""
+    _notify_intake_staff(
+        db, wo,
+        subject=f"Service request {wo.number} withdrawn by {customer_name}",
+        body=(f"{customer_name} withdrew their repair request through the portal before work began:\n\n"
+              f"  Work order: {wo.number}\n  Problem:    {wo.title}\n\n"
+              f"It has been cancelled. No action is needed.\n"),
+    )
 
 
 def notify_quote_sent(db: Session, wo: WorkOrder, quote_number: str, total: float) -> None:

@@ -117,6 +117,8 @@ export const api = {
     request(`/api/portal/quotes/${quoteId}/decision`, { method: "POST", body: { approve, note, po_number: poNumber || null } }),
   createServiceRequest: (body) =>
     request("/api/portal/service-requests", { method: "POST", body }),
+  withdrawWorkOrder: (id) =>
+    request(`/api/portal/work-orders/${id}/withdraw`, { method: "POST" }),
 };
 
 /** Fetch an authenticated binary endpoint and open it in a new tab (blob URL). */

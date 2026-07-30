@@ -68,6 +68,22 @@ async function renderOrders() {
   ["#requestBtn", "#requestBtnEmpty"].forEach((sel) => { const b = el(sel); if (b) b.addEventListener("click", openServiceRequest); });
 }
 
+async function withdraw(woId) {
+  const m = modal(`<div class="card-head"><h3>Withdraw request</h3></div>
+    <div class="card-body stack">
+      <p class="muted">This cancels your request before the service center begins work. You can always submit a new one later.</p>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="wc">Keep request</button>
+        <button class="btn btn-danger" id="wok">Withdraw</button></div></div>`);
+  el("#wc", m.root).onclick = m.close;
+  el("#wok", m.root).onclick = async () => {
+    try {
+      await api.withdrawWorkOrder(woId);
+      m.close(); toast("Request withdrawn.", "");
+      renderDetail(woId);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
+}
+
 /* ---------- new service request ---------- */
 async function openServiceRequest() {
   let equipment = [];
@@ -134,6 +150,7 @@ async function renderDetail(id) {
     <div class="page-title">
       <div><h1 style="margin-bottom:4px">${esc(w.title)}</h1>
         <div class="row"><span class="mono">${esc(w.number)}</span>${statusBadge(w.status)}</div></div>
+      ${w.status === "intake" ? '<button class="btn btn-ghost" id="withdrawBtn">Withdraw request</button>' : ""}
     </div>
     <div class="card card-pad" style="margin-bottom:18px">${bigTracker(w.status)}</div>
     ${pendingQuote ? quoteApprovalCard(pendingQuote, w, overLimit, limit) : ""}
@@ -166,6 +183,8 @@ async function renderDetail(id) {
   const ap = el("#approveBtn"), rj = el("#rejectBtn");
   if (ap) ap.addEventListener("click", () => decide(pendingQuote.id, true, id, overLimit));
   if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id, false));
+  const wd = el("#withdrawBtn");
+  if (wd) wd.addEventListener("click", () => withdraw(id));
   els("[data-inv]").forEach((b) =>
     b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
   els("[data-att]").forEach((b) =>
