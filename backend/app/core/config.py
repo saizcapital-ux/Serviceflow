@@ -50,6 +50,19 @@ class Settings(BaseSettings):
         return bool(self.stripe_secret_key)
 
     @property
+    def sqlalchemy_database_url(self) -> str:
+        """Normalized DB URL for SQLAlchemy.
+
+        Managed Postgres providers (Render, Heroku, Railway) sometimes hand out
+        a legacy ``postgres://`` scheme, which SQLAlchemy 2.0 no longer accepts.
+        Rewrite it to ``postgresql://`` so the default (psycopg2) driver is used.
+        """
+        url = self.database_url
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        return url
+
+    @property
     def cors_origin_list(self) -> list[str]:
         if self.cors_origins.strip() == "*":
             return ["*"]

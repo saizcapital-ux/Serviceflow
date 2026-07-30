@@ -1,0 +1,46 @@
+# Render Blueprint — one-click deploy of the Serviceflow backend + database.
+#
+# What this creates:
+#   • a free managed PostgreSQL database
+#   • a Python web service running the FastAPI API (Uvicorn)
+#
+# On each deploy the start command runs Alembic migrations, seeds the demo
+# tenant once (only if the DB is empty), then boots the API. The frontend is
+# hosted separately on Netlify — see docs/DEPLOY.md.
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: serviceflow-db
+    databaseName: serviceflow
+    plan: free
+
+services:
+  - type: web
+    name: serviceflow-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && python -m app.bootstrap && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: SERVICEFLOW_ENVIRONMENT
+        value: production
+      - key: SERVICEFLOW_DATABASE_URL
+        fromDatabase:
+          name: serviceflow-db
+          property: connectionString
+      - key: SERVICEFLOW_SECRET_KEY
+        generateValue: true
+      # Bearer-token auth (no cookies), so a wildcard origin is safe and lets
+      # every Netlify deploy-preview URL reach the API. Tighten if you add
+      # cookie-based auth later.
+      - key: SERVICEFLOW_CORS_ORIGINS
+        value: "*"
+      # Public URL of the Netlify frontend — used to build QR asset deep-links
+      # and billing redirect URLs. Update if your Netlify site name differs.
+      - key: SERVICEFLOW_APP_BASE_URL
+        value: "https://serviceflowappv2.netlify.app"

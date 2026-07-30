@@ -52,8 +52,12 @@ def reset() -> None:
     Base.metadata.create_all(bind=engine)
 
 
-def seed() -> None:
-    reset()
+def seed(reset_first: bool = True) -> None:
+    # In dev we drop + recreate for a clean slate. In production the schema is
+    # owned by Alembic and the tables already exist, so callers pass
+    # reset_first=False to populate demo data without dropping anything.
+    if reset_first:
+        reset()
     db = SessionLocal()
     try:
         org = Organization(

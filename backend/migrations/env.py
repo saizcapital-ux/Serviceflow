@@ -9,7 +9,7 @@ from app.core.database import Base
 import app.models  # noqa: F401  (import registers all tables on Base.metadata)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+config.set_main_option("sqlalchemy.url", settings.sqlalchemy_database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -19,7 +19,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=settings.database_url,
+        url=settings.sqlalchemy_database_url,
         target_metadata=target_metadata,
         literal_binds=True,
         render_as_batch=True,  # needed for SQLite ALTERs
@@ -31,7 +31,7 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     section = config.get_section(config.config_ini_section, {})
-    section["sqlalchemy.url"] = settings.database_url
+    section["sqlalchemy.url"] = settings.sqlalchemy_database_url
     connectable = engine_from_config(section, prefix="sqlalchemy.", poolclass=pool.NullPool)
     with connectable.connect() as connection:
         context.configure(

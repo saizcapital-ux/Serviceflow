@@ -83,6 +83,13 @@ cd ../frontend
 python -m http.server 5173    # open http://localhost:5173
 ```
 
+### Deploy it to the web (no local setup)
+
+Want a live, shareable URL instead of running it locally? Deploy the backend +
+Postgres to Render (one-click via [`render.yaml`](render.yaml)) and point the
+Netlify-hosted frontend at it with a one-line edit. Full walkthrough:
+**[`docs/DEPLOY.md`](docs/DEPLOY.md)**.
+
 ### Demo logins (created by the seed script)
 
 | Role              | Email                     | Password    |
