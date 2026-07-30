@@ -1338,6 +1338,7 @@ async function renderAnalytics() {
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:22px">
       ${stat("Completed (30d)", a.completed_30d, "ok", `${a.completed_90d} in last 90d`)}
       ${stat("On-time delivery", a.on_time_pct != null ? `${a.on_time_pct}%` : "—", a.on_time_pct != null && a.on_time_pct < 90 ? "warn" : "ok", "vs promised date")}
+      ${stat("First-pass yield", a.first_pass_yield_pct != null ? `${a.first_pass_yield_pct}%` : "—", a.first_pass_yield_pct != null && a.first_pass_yield_pct < 90 ? "warn" : "ok", a.jobs_tested ? `${a.jobs_reworked} rework of ${a.jobs_tested} tested` : "passed test first try")}
       ${stat("Avg turnaround", `${a.avg_turnaround_days}d`, "", "intake → shipped")}
       ${stat("Open jobs", a.open_total, "warn", "in shop &amp; field")}
       ${stat("Paid revenue", money(a.paid_revenue), "ok", "collected")}

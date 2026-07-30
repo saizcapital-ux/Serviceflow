@@ -40,7 +40,7 @@ A pragmatic path from the current MVP to a sellable, scalable SaaS.
 - ✅ Installable PWA (manifest + service worker, offline app shell)
 
 ### v2 follow-ups still open
-- Barcode (not just QR) scanning from a camera; first-pass-yield metric
+- Barcode (not just QR) scanning from a camera (first-pass-yield metric ✅ delivered)
 - Offline **job capture** (queue writes while offline, sync on reconnect)
 - Fully configurable statuses per shop
 
