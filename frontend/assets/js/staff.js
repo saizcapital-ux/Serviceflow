@@ -5,8 +5,11 @@ import {
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal, initThemeToggle,
 } from "/assets/js/ui.js";
 
-if (!auth.token) location.href = "/login.html";
-if (auth.user && auth.user.role === "customer") location.href = "/portal/";
+// Redirect unauthenticated or customer visitors, and stop so boot() below never
+// fires a doomed API call while the browser is navigating away.
+const _authed = auth.token && (!auth.user || auth.user.role !== "customer");
+if (!auth.token) location.replace("/login.html");
+else if (auth.user && auth.user.role === "customer") location.replace("/portal/");
 
 const view = el("#view");
 let customersCache = null;
@@ -1598,4 +1601,4 @@ async function renderNotifications() {
   els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
 }
 
-boot();
+if (_authed) boot();
