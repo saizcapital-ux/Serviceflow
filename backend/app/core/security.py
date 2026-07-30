@@ -22,6 +22,16 @@ def generate_api_key() -> tuple[str, str, str]:
     return full, full[:11], hash_api_key(full)
 
 
+def generate_token() -> str:
+    """A high-entropy, URL-safe token for invites and password resets."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_token(token: str) -> str:
+    """Store only the SHA-256 of invite/reset tokens (they're high-entropy)."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 

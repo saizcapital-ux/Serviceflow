@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg" />
+  <title>Accept invitation · Serviceflow</title>
+  <link rel="stylesheet" href="/assets/css/design-system.css" />
+  <script src="/config.js"></script>
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh; padding: 20px;
+      background: linear-gradient(135deg, var(--brand-900), var(--brand-700)); }
+    .auth { width: 100%; max-width: 440px; background: #fff; border-radius: var(--r-xl);
+      padding: 40px 36px; box-shadow: var(--sh-lg); }
+    .auth .logo { width: 46px; height: 46px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--brand-400), var(--accent-500));
+      display: grid; place-items: center; font-weight: 800; font-size: 1.4rem; color: #fff; margin-bottom: 20px; }
+    .invite-meta { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r);
+      padding: 12px 14px; font-size: .88rem; margin: 6px 0 14px; }
+    .invite-meta b { color: var(--ink-700); }
+    .err { color: var(--danger); font-size: .88rem; margin-top: 10px; min-height: 1.2em; }
+    .hint { font-size: .78rem; color: var(--ink-500); }
+    .back { display:inline-block; margin-top: 18px; font-size: .85rem; color: var(--brand-600); }
+  </style>
+</head>
+<body>
+  <div class="auth">
+    <div class="logo">S</div>
+    <div id="loading" class="muted" style="font-size:.9rem">Checking your invitation…</div>
+
+    <div id="invalid" class="hide">
+      <h2>Invitation unavailable</h2>
+      <p class="err" style="min-height:auto" id="invalidMsg">This invitation link is invalid, revoked, or expired.</p>
+      <a class="back" href="/login.html">← Go to sign in</a>
+    </div>
+
+    <div id="wrap" class="hide">
+      <h2>Join the team</h2>
+      <div class="invite-meta" id="meta"></div>
+      <form id="form" class="stack">
+        <label class="field"><span>Your full name</span>
+          <input type="text" id="fullName" required placeholder="Jordan Rivera" /></label>
+        <label class="field"><span>Create a password</span>
+          <input type="password" id="password" required autocomplete="new-password" minlength="8" placeholder="••••••••" />
+          <small class="hint">At least 8 characters.</small></label>
+        <label class="field"><span>Confirm password</span>
+          <input type="password" id="confirm" required autocomplete="new-password" placeholder="••••••••" /></label>
+        <button class="btn btn-primary btn-block" type="submit" id="submitBtn">Accept &amp; create account</button>
+        <div class="err" id="err"></div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api, auth } from "/assets/js/api.js";
+    const ROLE_LABELS = { owner: "Owner", manager: "Manager", service_writer: "Service Writer", technician: "Technician" };
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+    const $ = (id) => document.getElementById(id);
+
+    function showInvalid(msg) {
+      $("loading").classList.add("hide");
+      $("wrap").classList.add("hide");
+      if (msg) $("invalidMsg").textContent = msg;
+      $("invalid").classList.remove("hide");
+    }
+
+    async function init() {
+      if (!token) return showInvalid("No invitation token was provided.");
+      try {
+        const info = await api.lookupInvite(token);
+        $("meta").innerHTML =
+          `You've been invited to join <b>${info.organization_name}</b> as a ` +
+          `<b>${ROLE_LABELS[info.role] || info.role}</b>.<br>Account email: <b>${info.email}</b>`;
+        $("loading").classList.add("hide");
+        $("wrap").classList.remove("hide");
+      } catch (ex) {
+        showInvalid(ex.message);
+      }
+    }
+
+    $("form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = $("err"); err.textContent = "";
+      const name = $("fullName").value.trim();
+      const pw = $("password").value;
+      const confirm = $("confirm").value;
+      if (!name) { err.textContent = "Please enter your name."; return; }
+      if (pw.length < 8) { err.textContent = "Password must be at least 8 characters."; return; }
+      if (pw !== confirm) { err.textContent = "Passwords don't match."; return; }
+      const btn = $("submitBtn"); btn.disabled = true; btn.textContent = "Creating account…";
+      try {
+        const res = await api.acceptInvite(token, name, pw);
+        auth.save(res.access_token, res.user);
+        location.href = res.user.role === "customer" ? "/portal/" : "/app/";
+      } catch (ex) {
+        err.textContent = ex.message || "Could not accept the invitation.";
+        btn.disabled = false; btn.textContent = "Accept & create account";
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

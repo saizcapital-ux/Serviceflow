@@ -153,6 +153,43 @@ def notify_staff_request_withdrawn(db: Session, wo: WorkOrder, customer_name: st
     )
 
 
+def notify_invite(
+    db: Session,
+    *,
+    organization_id: int,
+    email: str,
+    token: str,
+    inviter_name: str,
+    org_name: str,
+    role: str,
+) -> None:
+    """Email a prospective staff member their invitation link."""
+    link = f"{settings.app_base_url}/accept-invite.html?token={token}"
+    record_and_send(
+        db, organization_id=organization_id, recipient=email,
+        subject=f"You're invited to join {org_name} on Serviceflow",
+        body=(f"Hello,\n\n{inviter_name} invited you to join {org_name} on Serviceflow "
+              f"as a {role.replace('_', ' ')}.\n\n"
+              f"Accept the invitation and set your password here:\n{link}\n\n"
+              f"This link expires in 7 days. If you weren't expecting this, you can ignore it.\n"),
+    )
+
+
+def notify_password_reset(
+    db: Session, *, organization_id: int, email: str, token: str, name: str
+) -> None:
+    """Email a user a single-use password-reset link."""
+    link = f"{settings.app_base_url}/reset-password.html?token={token}"
+    record_and_send(
+        db, organization_id=organization_id, recipient=email,
+        subject="Reset your Serviceflow password",
+        body=(f"Hello {name},\n\nWe received a request to reset your Serviceflow password.\n\n"
+              f"Set a new password here:\n{link}\n\n"
+              f"This link expires in 1 hour. If you didn't request this, you can safely ignore "
+              f"this email — your password won't change.\n"),
+    )
+
+
 def notify_quote_sent(db: Session, wo: WorkOrder, quote_number: str, total: float) -> None:
     email = _customer_email(db, wo.customer_id)
     if not email:

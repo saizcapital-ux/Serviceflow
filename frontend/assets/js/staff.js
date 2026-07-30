@@ -24,8 +24,11 @@ function boot() {
   el("#logout").addEventListener("click", () => { auth.clear(); location.href = "/login.html"; });
   initThemeToggle(el("#themeToggle"));
   el("#newWoBtn").addEventListener("click", openNewWorkOrder);
-  // Audit log is owner/manager only; Developers is owner only.
-  if (!["owner", "manager"].includes(u.role)) el("#navAudit")?.classList.add("hide");
+  // Audit log & Team are owner/manager only; Developers is owner only.
+  if (!["owner", "manager"].includes(u.role)) {
+    el("#navAudit")?.classList.add("hide");
+    el("#navTeam")?.classList.add("hide");
+  }
   if (u.role !== "owner") el("#navDev")?.classList.add("hide");
   els(".nav-link[data-route]").forEach((a) =>
     a.addEventListener("click", () => (location.hash = `#/${a.dataset.route}`)));
@@ -148,6 +151,7 @@ async function router() {
     if (route === "invoices") return renderInvoices();
     if (route === "notifications") return renderNotifications();
     if (route === "audit") return renderAudit();
+    if (route === "team") return renderTeam();
     if (route === "developer") return renderDeveloper();
     if (route === "billing") return renderBilling();
     if (route === "analytics") return renderAnalytics();
@@ -1330,10 +1334,13 @@ async function renderAnalytics() {
   const workloadRows = a.tech_workload.map((r) => ({ label: r.technician, value: r.hours }));
 
   view.innerHTML = `
-    <div class="page-title"><h1>Analytics</h1><span class="muted">Shop performance at a glance</span></div>
+    <div class="page-title"><h1>Analytics</h1>
+      <div class="row"><span class="muted">Shop performance at a glance</span>
+        <button class="btn btn-ghost btn-sm" id="dlReport">⬇ Download PDF</button></div></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:22px">
       ${stat("Completed (30d)", a.completed_30d, "ok", `${a.completed_90d} in last 90d`)}
       ${stat("On-time delivery", a.on_time_pct != null ? `${a.on_time_pct}%` : "—", a.on_time_pct != null && a.on_time_pct < 90 ? "warn" : "ok", "vs promised date")}
+      ${stat("First-pass yield", a.first_pass_yield_pct != null ? `${a.first_pass_yield_pct}%` : "—", a.first_pass_yield_pct != null && a.first_pass_yield_pct < 90 ? "warn" : "ok", a.jobs_tested ? `${a.jobs_reworked} rework of ${a.jobs_tested} tested` : "passed test first try")}
       ${stat("Avg turnaround", `${a.avg_turnaround_days}d`, "", "intake → shipped")}
       ${stat("Open jobs", a.open_total, "warn", "in shop &amp; field")}
       ${stat("Paid revenue", money(a.paid_revenue), "ok", "collected")}
@@ -1369,6 +1376,9 @@ async function renderAnalytics() {
     if (e.target.tagName === "A") return;
     location.hash = `#/equipment/${tr.dataset.eqid}`;
   }));
+  el("#dlReport")?.addEventListener("click", () =>
+    downloadAuthed("/api/analytics/report.pdf", `shop-performance-${new Date().toISOString().slice(0, 10)}.pdf`)
+      .catch((e) => toast(e.message, "err")));
 }
 
 /* ---------- billing (SaaS subscription) ---------- */
@@ -1491,6 +1501,85 @@ async function renderDeveloper() {
         : '<p class="muted">No deliveries yet.</p>';
     } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
   }));
+}
+
+/* ---------- team ---------- */
+const ROLE_LABELS = {
+  owner: "Owner", manager: "Manager", service_writer: "Service Writer", technician: "Technician",
+};
+const INVITE_STATUS_CLASS = {
+  pending: "quote_pending", accepted: "ready", revoked: "cancelled", expired: "cancelled",
+};
+
+async function renderTeam() {
+  loading();
+  const [members, invites] = await Promise.all([api.users(), api.invites()]);
+  const memberRows = members.map((m) => `<tr data-nostyle>
+    <td><strong>${esc(m.full_name)}</strong></td>
+    <td>${esc(ROLE_LABELS[m.role] || m.role)}</td></tr>`).join("") ||
+    '<tr><td colspan="2" class="muted" style="text-align:center;padding:20px">No teammates yet.</td></tr>';
+
+  const inviteRows = invites.map((i) => {
+    const cls = INVITE_STATUS_CLASS[i.status] || "intake";
+    const canRevoke = i.status === "pending";
+    return `<tr data-nostyle>
+      <td>${esc(i.email)}</td>
+      <td>${esc(ROLE_LABELS[i.role] || i.role)}</td>
+      <td><span class="badge status ${cls}">${esc(i.status)}</span></td>
+      <td class="muted">${esc(i.invited_by_name || "—")}</td>
+      <td class="muted nowrap">${i.status === "pending" ? "expires " + fmtDate(i.expires_at) : (i.accepted_at ? fmtDate(i.accepted_at) : "—")}</td>
+      <td class="text-right">${canRevoke ? `<button class="btn btn-danger btn-sm" data-revoke-invite="${i.id}">Revoke</button>` : ""}</td></tr>`;
+  }).join("") ||
+    '<tr><td colspan="6" class="muted" style="text-align:center;padding:20px">No invitations yet.</td></tr>';
+
+  view.innerHTML = `
+    <div class="page-title"><h1>Team</h1><span class="muted">Invite staff and manage access</span></div>
+
+    <div class="card" style="margin-bottom:20px"><div class="card-head"><h3>Members</h3></div>
+      <div class="card-body"><div class="table-wrap"><table class="data">
+        <thead><tr><th>Name</th><th>Role</th></tr></thead>
+        <tbody>${memberRows}</tbody></table></div></div></div>
+
+    <div class="card"><div class="card-head"><h3>Invitations</h3>
+      <button class="btn btn-primary btn-sm" id="newInvite">+ Invite teammate</button></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px">Invited staff receive an email link to set their
+          password and join. Links expire after 7 days.</p>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Invited by</th><th>When</th><th></th></tr></thead>
+          <tbody>${inviteRows}</tbody></table></div></div></div>`;
+
+  el("#newInvite").addEventListener("click", openInvite);
+  els("[data-revoke-invite]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Revoke this invitation? The link will stop working.")) return;
+    try { await api.revokeInvite(b.dataset.revokeInvite); toast("Invitation revoked", ""); renderTeam(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+}
+
+function openInvite() {
+  const m = modal(`<div class="card-head"><h3>Invite a teammate</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Email</span><input id="ie" type="email" placeholder="name@company.com" /></label>
+      <label class="field"><span>Role</span><select id="ir">
+        <option value="technician">Technician</option>
+        <option value="service_writer">Service Writer</option>
+        <option value="manager">Manager</option>
+        <option value="owner">Owner</option></select></label>
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="icx">Cancel</button>
+        <button class="btn btn-primary" id="iok">Send invite</button></div></div>`);
+  el("#icx", m.root).onclick = m.close;
+  el("#iok", m.root).onclick = async () => {
+    const email = el("#ie", m.root).value.trim();
+    const role = el("#ir", m.root).value;
+    if (!email) return toast("Email is required", "err");
+    try {
+      await api.createInvite(email, role);
+      m.close();
+      toast(`Invitation sent to ${email}`, "ok");
+      renderTeam();
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function openNewKey() {

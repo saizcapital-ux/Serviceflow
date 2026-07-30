@@ -1,5 +1,9 @@
 """Serviceflow API — FastAPI application entrypoint."""
-from fastapi import FastAPI
+import logging
+import time
+import uuid
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import (
@@ -13,6 +17,7 @@ from app.api.routers import (
     dashboard,
     developer,
     integration,
+    invites,
     invoices,
     locations,
     notifications,
@@ -46,6 +51,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Structured access logging. Uvicorn configures the root handler; we just make
+# sure our app logger propagates at INFO so request lines are emitted.
+logging.getLogger("serviceflow").setLevel(logging.INFO)
+_access_log = logging.getLogger("serviceflow.access")
+
+
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    """Attach a request id to every request/response and log one line per call."""
+    request_id = request.headers.get("x-request-id") or uuid.uuid4().hex
+    request.state.request_id = request_id
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - started) * 1000
+        _access_log.exception(
+            "%s %s -> 500 %.1fms request_id=%s", request.method, request.url.path, duration_ms, request_id
+        )
+        raise
+    duration_ms = (time.perf_counter() - started) * 1000
+    response.headers["X-Request-ID"] = request_id
+    _access_log.info(
+        "%s %s -> %d %.1fms request_id=%s",
+        request.method, request.url.path, response.status_code, duration_ms, request_id,
+    )
+    return response
+
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(analytics.router)
@@ -54,6 +87,7 @@ app.include_router(developer.router)
 app.include_router(integration.router)
 app.include_router(billing.router)
 app.include_router(team.router)
+app.include_router(invites.router)
 app.include_router(search.router)
 app.include_router(locations.router)
 app.include_router(customers.router)

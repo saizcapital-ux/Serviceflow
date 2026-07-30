@@ -255,13 +255,15 @@ def seed(reset_first: bool = True) -> None:
         db.add(WorkOrderEvent(work_order_id=wo3.id, event_type=EventType.field_visit,
                               message="Field visit scheduled for Unit 5.", visible_to_customer=True))
 
-        # 4) Blower — ready to ship
+        # 4) Blower — ready to ship. Failed its first performance test and went
+        # back for rework (testing → in_repair) before passing on the retest, so
+        # first-pass-yield analytics reflect a realistic rework.
         make_wo("WO-2026-0004", gulf, blower,
                 "Rotary blower overhaul — bearing & timing gear replacement",
                 "Scheduled overhaul. Replace bearings, timing gears, reset clearances, performance test.",
                 [WorkOrderStatus.intake, WorkOrderStatus.inspection, WorkOrderStatus.quote_pending,
                  WorkOrderStatus.approved, WorkOrderStatus.in_repair, WorkOrderStatus.testing,
-                 WorkOrderStatus.ready],
+                 WorkOrderStatus.in_repair, WorkOrderStatus.testing, WorkOrderStatus.ready],
                 ServiceType.shop_repair, Priority.normal, assigned=tech, promised_offset=1)
 
         # 5) Older closed motor job (history) — invoiced & paid

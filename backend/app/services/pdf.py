@@ -107,6 +107,139 @@ def render_invoice_pdf(*, org, invoice, work_order, customer, equipment) -> byte
     return buf.getvalue()
 
 
+STATUS_LABELS = {
+    "intake": "Intake", "inspection": "Inspection", "quote_pending": "Awaiting approval",
+    "approved": "Approved", "quote_rejected": "Quote rejected", "in_repair": "In repair",
+    "testing": "Testing", "ready": "Ready", "shipped": "Shipped", "closed": "Closed",
+    "on_hold": "On hold", "cancelled": "Cancelled",
+}
+TYPE_LABELS = {
+    "motor": "Motors", "valve": "Valves", "actuator": "Actuators", "pump": "Pumps",
+    "blower": "Blowers", "gearbox": "Gearboxes", "other": "Other",
+}
+
+
+def render_analytics_pdf(*, org, summary: dict, reliability: list[dict], generated_at) -> bytes:
+    """Render a one-page shop-performance report from the analytics summary."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
+        leftMargin=0.7 * inch, rightMargin=0.7 * inch, title=f"{org.name} — Shop Performance Report",
+    )
+    styles = getSampleStyleSheet()
+    normal = styles["Normal"]
+    small = normal.clone("small3"); small.fontSize = 8; small.textColor = colors.HexColor("#64748b")
+    h = styles["Heading2"]; h.textColor = BRAND
+    story = []
+
+    header = Table(
+        [[Paragraph(f"<b>{org.name}</b><br/><font size=8 color='#64748b'>Shop Performance Report</font>", normal),
+          Paragraph("<b>REPORT</b>", styles["Heading1"])]],
+        colWidths=[4.0 * inch, 2.8 * inch],
+    )
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("ALIGN", (1, 0), (1, 0), "RIGHT")]))
+    story += [header, Paragraph(f"Generated {generated_at.strftime('%b %d, %Y %H:%M UTC')}", small), Spacer(1, 12)]
+
+    def _pct(v):
+        return f"{v}%" if v is not None else "—"
+
+    # KPI grid (label / value pairs, two per row).
+    fpy = summary.get("first_pass_yield_pct")
+    kpis = [
+        ("Completed (30d)", str(summary.get("completed_30d", 0))),
+        ("Completed (90d)", str(summary.get("completed_90d", 0))),
+        ("Open jobs", str(summary.get("open_total", 0))),
+        ("Avg turnaround", f"{summary.get('avg_turnaround_days', 0)}d"),
+        ("On-time delivery", _pct(summary.get("on_time_pct"))),
+        ("First-pass yield", _pct(fpy) + (f"  ({summary.get('jobs_reworked', 0)} rework / {summary.get('jobs_tested', 0)} tested)" if summary.get("jobs_tested") else "")),
+        ("Paid revenue", _money(summary.get("paid_revenue", 0.0))),
+        ("Outstanding", _money(summary.get("outstanding_revenue", 0.0))),
+    ]
+    kpi_rows = []
+    for i in range(0, len(kpis), 2):
+        left = kpis[i]
+        rightk = kpis[i + 1] if i + 1 < len(kpis) else ("", "")
+        kpi_rows.append([
+            Paragraph(f"<font size=8 color='#64748b'>{left[0]}</font><br/><b>{left[1]}</b>", normal),
+            Paragraph(f"<font size=8 color='#64748b'>{rightk[0]}</font><br/><b>{rightk[1]}</b>", normal),
+        ])
+    kpi_tbl = Table(kpi_rows, colWidths=[3.35 * inch, 3.35 * inch])
+    kpi_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), LIGHT), ("BOX", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.4, colors.white),
+        ("TOPPADDING", (0, 0), (-1, -1), 8), ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 10),
+    ]))
+    story += [kpi_tbl, Spacer(1, 14)]
+
+    def _kv_table(title: str, rows: list[list[str]], right_align_col: int | None = None):
+        story.append(Paragraph(title, h))
+        if not rows:
+            story.append(Paragraph("No data.", small))
+            story.append(Spacer(1, 10))
+            return
+        tbl = Table(rows, colWidths=[4.4 * inch, 2.3 * inch])
+        style = [
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [colors.white, LIGHT]),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#e2e8f0")),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]
+        if right_align_col is not None:
+            style.append(("ALIGN", (right_align_col, 0), (right_align_col, -1), "RIGHT"))
+        tbl.setStyle(TableStyle(style))
+        story.append(tbl)
+        story.append(Spacer(1, 12))
+
+    # Revenue by month.
+    rev_rows = [[r["month"], _money(r["revenue"])] for r in summary.get("revenue_by_month", [])]
+    _kv_table("Revenue by month", rev_rows, right_align_col=1)
+
+    # Open pipeline by status.
+    status_rows = [
+        [STATUS_LABELS.get(s, s), str(c)]
+        for s, c in sorted(summary.get("status_counts", {}).items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    _kv_table("Open pipeline by status", status_rows, right_align_col=1)
+
+    # Jobs by equipment type.
+    type_rows = [
+        [TYPE_LABELS.get(t, t.title()), str(c)]
+        for t, c in sorted(summary.get("by_type", {}).items(), key=lambda kv: kv[1], reverse=True)
+    ]
+    _kv_table("Jobs by equipment type", type_rows, right_align_col=1)
+
+    # Technician workload.
+    workload_rows = [[r["technician"], f"{r['hours']}h"] for r in summary.get("tech_workload", [])]
+    _kv_table("Technician workload", workload_rows, right_align_col=1)
+
+    # Assets needing attention.
+    story += [Paragraph("Assets needing attention", h)]
+    if reliability:
+        rows = [["Asset", "Type", "Repairs (12mo)", "Total", "MTBR"]]
+        for r in reliability[:10]:
+            rows.append([
+                (r.get("tag") or r.get("label") or "Asset") + ("  ⚠" if r.get("watch") else ""),
+                TYPE_LABELS.get(r.get("equipment_type"), (r.get("equipment_type") or "").title()),
+                str(r.get("repairs_12mo", 0)), str(r.get("repairs_total", 0)),
+                f"{r['mtbr_days']}d" if r.get("mtbr_days") is not None else "—",
+            ])
+        tbl = Table(rows, colWidths=[2.6 * inch, 1.2 * inch, 1.3 * inch, 0.8 * inch, 0.8 * inch])
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), BRAND), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 8), ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, LIGHT]),
+            ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story += [tbl]
+    else:
+        story += [Paragraph("Not enough repair history yet.", small)]
+
+    story += [Spacer(1, 18), Paragraph("Generated by Serviceflow.", small)]
+    doc.build(story)
+    return buf.getvalue()
+
+
 def render_work_order_pdf(*, org, work_order, customer, equipment, findings, checklist, parts) -> bytes:
     """Render a shop-floor job traveler for a work order."""
     buf = io.BytesIO()

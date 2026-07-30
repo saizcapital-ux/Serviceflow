@@ -34,6 +34,16 @@ export const api = {
   // auth
   login: (email, password) => request("/api/auth/login", { method: "POST", body: { email, password }, auth: false }),
   me: () => request("/api/auth/me"),
+  // password reset (public)
+  forgotPassword: (email) => request("/api/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
+  resetPassword: (token, password) => request("/api/auth/reset-password", { method: "POST", body: { token, password }, auth: false }),
+  // team invitations
+  invites: () => request("/api/invites"),
+  createInvite: (email, role) => request("/api/invites", { method: "POST", body: { email, role } }),
+  revokeInvite: (id) => request(`/api/invites/${id}/revoke`, { method: "POST" }),
+  lookupInvite: (token) => request(`/api/invites/accept?token=${encodeURIComponent(token)}`, { auth: false }),
+  acceptInvite: (token, fullName, password) =>
+    request("/api/invites/accept", { method: "POST", body: { token, full_name: fullName, password }, auth: false }),
   // search
   search: (q) => request(`/api/search?q=${encodeURIComponent(q)}`),
   // dashboard

@@ -14,10 +14,41 @@ from app.models import (
     TimeEntry,
     User,
     WorkOrder,
+    WorkOrderEvent,
     WorkOrderStatus,
 )
 
 CLOSED_STATES = {WorkOrderStatus.closed, WorkOrderStatus.shipped}
+
+
+def first_pass_yield(db: Session, organization_id: int) -> dict:
+    """Quality KPI: of jobs that reached testing, the share that passed the
+    first time. A ``testing → in_repair`` transition means a unit failed test
+    and went back for rework, so any job with that transition is not first-pass.
+    """
+    events = db.scalars(
+        select(WorkOrderEvent)
+        .join(WorkOrder, WorkOrderEvent.work_order_id == WorkOrder.id)
+        .where(WorkOrder.organization_id == organization_id)
+    ).all()
+
+    tested: set[int] = set()
+    reworked: set[int] = set()
+    for e in events:
+        if e.to_status == WorkOrderStatus.testing:
+            tested.add(e.work_order_id)
+        if e.from_status == WorkOrderStatus.testing and e.to_status == WorkOrderStatus.in_repair:
+            reworked.add(e.work_order_id)
+
+    reworked &= tested  # only count rework among jobs we actually tested
+    tested_n = len(tested)
+    reworked_n = len(reworked)
+    pct = round((tested_n - reworked_n) / tested_n * 100, 1) if tested_n else None
+    return {
+        "jobs_tested": tested_n,
+        "jobs_reworked": reworked_n,
+        "first_pass_yield_pct": pct,
+    }
 
 
 def _aware(dt: datetime | None) -> datetime | None:
@@ -140,12 +171,17 @@ def summary(db: Session, organization_id: int) -> dict:
     outstanding = round(sum(i.total for i in invoices
                             if i.status in (InvoiceStatus.sent, InvoiceStatus.draft)), 2)
 
+    fpy = first_pass_yield(db, organization_id)
+
     return {
         "completed_30d": done_since(30),
         "completed_90d": done_since(90),
         "open_total": open_total,
         "avg_turnaround_days": avg_turnaround,
         "on_time_pct": on_time_pct,
+        "first_pass_yield_pct": fpy["first_pass_yield_pct"],
+        "jobs_tested": fpy["jobs_tested"],
+        "jobs_reworked": fpy["jobs_reworked"],
         "paid_revenue": paid_revenue,
         "outstanding_revenue": outstanding,
         "revenue_by_month": revenue_by_month,
