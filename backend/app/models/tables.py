@@ -456,3 +456,43 @@ class Attachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     work_order: Mapped[WorkOrder] = relationship(back_populates="attachments")
+
+
+class Invitation(Base):
+    """A pending invitation for a new staff member to join an organization.
+
+    The raw token is emailed to the invitee and never stored — only its
+    SHA-256 hash is kept. Status is derived from the timestamp columns rather
+    than stored as an enum: pending → accepted (accepted_at) / revoked
+    (revoked_at) / expired (past expires_at).
+    """
+
+    __tablename__ = "invitations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    email: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    role: Mapped[UserRole] = mapped_column(Enum(UserRole), default=UserRole.technician)
+    token_hash: Mapped[str] = mapped_column(String(80), index=True)  # sha256 hex
+    invited_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class PasswordResetToken(Base):
+    """A single-use, time-limited token that lets a user set a new password.
+
+    Only the SHA-256 hash of the token is stored; the raw token travels in the
+    emailed reset link.
+    """
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(80), index=True)  # sha256 hex
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

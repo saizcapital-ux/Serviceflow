@@ -58,10 +58,20 @@ A pragmatic path from the current MVP to a sellable, scalable SaaS.
 - SLA tracking and predictive-maintenance insights
 - Background delivery queue with retries/backoff for webhooks
 
+## ✅ v4 — "Onboard a team" (delivered)
+
+- ✅ **Team management**: owners/managers invite staff by email; a tokenized,
+  7-day accept link lets invitees set their own password and join (auto
+  sign-in on accept). Pending invites are listable and revocable.
+- ✅ **Self-service password reset**: "Forgot password?" issues a single-use,
+  1-hour reset link (no account enumeration — the endpoint always 202s).
+- ✅ Web deployment: Render blueprint (backend + Postgres) and a Netlify-hosted
+  frontend, wired via `frontend/config.js` (see `docs/DEPLOY.md`).
+
 ## Engineering hardening (continuous)
 
 - Move frontend to Vite + React when interactivity demands it (API contract and
   design tokens already carry over)
 - Structured logging, request IDs, error tracking (Sentry)
-- Rate limiting, refresh tokens, password reset & invite flows
+- Rate limiting and refresh tokens (password reset & invite flows ✅ delivered in v4)
 - Containerization (Docker) + IaC; managed Postgres; automated backups

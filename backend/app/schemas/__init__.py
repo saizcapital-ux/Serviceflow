@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.models.enums import (
     EquipmentType,
@@ -43,6 +43,56 @@ class UserOut(ORMModel):
     role: UserRole
     customer_id: int | None = None
     organization_id: int
+
+
+# ---------- Team invitations ----------
+# Staff roles an owner/manager may invite. Portal customers aren't invited here.
+_INVITABLE_ROLES = {UserRole.owner, UserRole.manager, UserRole.service_writer, UserRole.technician}
+
+
+class InviteCreate(BaseModel):
+    email: EmailStr
+    role: UserRole = UserRole.technician
+
+    @field_validator("role")
+    @classmethod
+    def _staff_role_only(cls, v: UserRole) -> UserRole:
+        if v not in _INVITABLE_ROLES:
+            raise ValueError("You can only invite staff roles (owner, manager, service_writer, technician).")
+        return v
+
+
+class InviteOut(BaseModel):
+    id: int
+    email: EmailStr
+    role: UserRole
+    status: str  # pending | accepted | revoked | expired
+    invited_by_name: str | None = None
+    expires_at: datetime
+    accepted_at: datetime | None = None
+    created_at: datetime
+
+
+class InviteLookup(BaseModel):
+    """Public details shown on the accept-invite page for a valid token."""
+    email: EmailStr
+    role: UserRole
+    organization_name: str
+
+
+class InviteAccept(BaseModel):
+    token: str
+    full_name: str = Field(min_length=1, max_length=200)
+    password: str = Field(min_length=8, max_length=200)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=200)
 
 
 # ---------- Customers ----------

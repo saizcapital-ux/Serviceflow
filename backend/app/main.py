@@ -13,6 +13,7 @@ from app.api.routers import (
     dashboard,
     developer,
     integration,
+    invites,
     invoices,
     locations,
     notifications,
@@ -54,6 +55,7 @@ app.include_router(developer.router)
 app.include_router(integration.router)
 app.include_router(billing.router)
 app.include_router(team.router)
+app.include_router(invites.router)
 app.include_router(search.router)
 app.include_router(locations.router)
 app.include_router(customers.router)
