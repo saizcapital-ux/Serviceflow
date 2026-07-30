@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models import (
+    Customer,
     Equipment,
     EventType,
     Invoice,
@@ -27,7 +28,7 @@ from app.schemas import (
     WorkOrderDetail,
     WorkOrderSummary,
 )
-from app.services import audit, workflow
+from app.services import audit, notifications, workflow
 
 router = APIRouter(prefix="/api/portal", tags=["portal"])
 
@@ -173,6 +174,8 @@ def create_service_request(
     audit.record(db, organization_id=user.organization_id, actor=user, action="service_request.created",
                  summary=f"Customer submitted service request {number} — {wo.title}",
                  entity_type="work_order", entity_id=wo.id)
+    customer = db.get(Customer, user.customer_id)
+    notifications.notify_staff_new_request(db, wo, customer.name if customer else user.full_name)
     db.commit()
     wo = db.scalar(
         select(WorkOrder)

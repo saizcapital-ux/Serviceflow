@@ -22,6 +22,8 @@ from app.models import (
     Notification,
     NotificationChannel,
     NotificationStatus,
+    User,
+    UserRole,
     WorkOrder,
 )
 
@@ -104,6 +106,35 @@ def notify_customer_status(db: Session, wo: WorkOrder, message: str) -> None:
         body=(f"Hello,\n\nThere's an update on your repair {wo.number} ({wo.title}):\n\n"
               f"{message}\n\nLog in to your Serviceflow portal to see the full status and history.\n"),
     )
+
+
+# Staff roles that triage inbound work at intake.
+_INTAKE_ROLES = (UserRole.owner, UserRole.manager, UserRole.service_writer)
+
+
+def notify_staff_new_request(db: Session, wo: WorkOrder, customer_name: str) -> None:
+    """Email the shop's intake staff that a customer submitted a new service request."""
+    staff = db.scalars(
+        select(User).where(
+            User.organization_id == wo.organization_id,
+            User.role.in_(_INTAKE_ROLES),
+            User.is_active.is_(True),
+        )
+    ).all()
+    subject = f"New service request {wo.number} from {customer_name}"
+    body = (
+        f"A customer submitted a repair request through the portal:\n\n"
+        f"  Work order: {wo.number}\n  Customer:   {customer_name}\n"
+        f"  Priority:   {wo.priority.value}\n  Problem:    {wo.title}\n\n"
+        f"It's waiting at intake in Serviceflow — review and schedule the inspection.\n"
+    )
+    for member in staff:
+        if not member.email:
+            continue
+        record_and_send(
+            db, organization_id=wo.organization_id, customer_id=wo.customer_id, work_order_id=wo.id,
+            recipient=member.email, subject=subject, body=body,
+        )
 
 
 def notify_quote_sent(db: Session, wo: WorkOrder, quote_number: str, total: float) -> None:

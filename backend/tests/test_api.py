@@ -34,8 +34,9 @@ def test_portal_only_sees_own_work_orders(client, portal_headers):
     assert "WO-2026-0003" not in numbers
 
 
-def test_portal_service_request_creates_intake_work_order(client, portal_headers):
+def test_portal_service_request_creates_intake_work_order(client, staff_headers, portal_headers):
     eq = client.get("/api/portal/equipment", headers=portal_headers).json()
+    staff_notes_before = len(client.get("/api/notifications", headers=staff_headers).json())
     r = client.post(
         "/api/portal/service-requests",
         headers=portal_headers,
@@ -59,6 +60,10 @@ def test_portal_service_request_creates_intake_work_order(client, portal_headers
     # It now shows up in the customer's own list.
     numbers = {w["number"] for w in client.get("/api/portal/work-orders", headers=portal_headers).json()}
     assert wo["number"] in numbers
+    # Intake staff are notified of the inbound request.
+    staff_notes = client.get("/api/notifications", headers=staff_headers).json()
+    assert len(staff_notes) > staff_notes_before
+    assert any(n["work_order_id"] == wo["id"] and wo["number"] in n["subject"] for n in staff_notes)
 
 
 def test_portal_service_request_rejects_foreign_equipment(client, portal_headers):
