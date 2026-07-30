@@ -6,12 +6,22 @@ Create Date: 2026-07-30 20:01:28.393346
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = 'c6bc384d7643'
 down_revision = '2dca9a9e290a'
 branch_labels = None
 depends_on = None
+
+# The 'userrole' enum type already exists (created by the initial migration for
+# users.role). Reference it with create_type=False so this table's creation does
+# not re-emit CREATE TYPE on PostgreSQL (which errors with "type already
+# exists"); on SQLite this renders as VARCHAR, same as a plain Enum.
+_userrole = postgresql.ENUM(
+    'owner', 'manager', 'service_writer', 'technician', 'customer',
+    name='userrole', create_type=False,
+)
 
 
 def upgrade() -> None:
@@ -20,7 +30,7 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('organization_id', sa.Integer(), nullable=False),
     sa.Column('email', sa.String(length=255), nullable=False),
-    sa.Column('role', sa.Enum('owner', 'manager', 'service_writer', 'technician', 'customer', name='userrole'), nullable=False),
+    sa.Column('role', _userrole, nullable=False),
     sa.Column('token_hash', sa.String(length=80), nullable=False),
     sa.Column('invited_by', sa.Integer(), nullable=True),
     sa.Column('expires_at', sa.DateTime(timezone=True), nullable=False),
