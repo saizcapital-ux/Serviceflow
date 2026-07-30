@@ -1334,7 +1334,9 @@ async function renderAnalytics() {
   const workloadRows = a.tech_workload.map((r) => ({ label: r.technician, value: r.hours }));
 
   view.innerHTML = `
-    <div class="page-title"><h1>Analytics</h1><span class="muted">Shop performance at a glance</span></div>
+    <div class="page-title"><h1>Analytics</h1>
+      <div class="row"><span class="muted">Shop performance at a glance</span>
+        <button class="btn btn-ghost btn-sm" id="dlReport">⬇ Download PDF</button></div></div>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:22px">
       ${stat("Completed (30d)", a.completed_30d, "ok", `${a.completed_90d} in last 90d`)}
       ${stat("On-time delivery", a.on_time_pct != null ? `${a.on_time_pct}%` : "—", a.on_time_pct != null && a.on_time_pct < 90 ? "warn" : "ok", "vs promised date")}
@@ -1374,6 +1376,9 @@ async function renderAnalytics() {
     if (e.target.tagName === "A") return;
     location.hash = `#/equipment/${tr.dataset.eqid}`;
   }));
+  el("#dlReport")?.addEventListener("click", () =>
+    downloadAuthed("/api/analytics/report.pdf", `shop-performance-${new Date().toISOString().slice(0, 10)}.pdf`)
+      .catch((e) => toast(e.message, "err")));
 }
 
 /* ---------- billing (SaaS subscription) ---------- */
