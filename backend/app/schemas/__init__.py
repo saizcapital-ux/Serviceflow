@@ -229,6 +229,11 @@ class StatusChangeRequest(BaseModel):
     visible_to_customer: bool = True
 
 
+class NoteCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=2000)
+    visible_to_customer: bool = False
+
+
 class EventOut(ORMModel):
     id: int
     event_type: EventType

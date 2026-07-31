@@ -34,6 +34,7 @@ from app.schemas import (
     CostingSummary,
     FindingCreate,
     FindingOut,
+    NoteCreate,
     PartUsageCreate,
     PartUsageOut,
     QuoteCreate,
@@ -279,6 +280,25 @@ def add_finding(
     db.commit()
     db.refresh(finding)
     return finding
+
+
+@router.post("/{wo_id}/notes", response_model=WorkOrderDetail, status_code=status.HTTP_201_CREATED)
+def add_note(
+    wo_id: int, payload: NoteCreate, db: Session = Depends(get_db), user: User = Depends(require_staff)
+):
+    """Add a free-text note to the work-order timeline (internal by default;
+    optionally shared with the customer, which also emails them)."""
+    wo = _load_detail(db, wo_id, user.organization_id)
+    db.add(WorkOrderEvent(
+        work_order_id=wo.id, event_type=EventType.note, message=payload.message,
+        created_by=user.id, visible_to_customer=payload.visible_to_customer,
+    ))
+    if payload.visible_to_customer:
+        notifications.notify_customer_status(db, wo, payload.message)
+    audit.record(db, organization_id=user.organization_id, actor=user, action="work_order.note_added",
+                 summary=f"Note on {wo.number}", entity_type="work_order", entity_id=wo.id)
+    db.commit()
+    return _load_detail(db, wo_id, user.organization_id)
 
 
 @router.post("/{wo_id}/quotes", response_model=QuoteOut, status_code=status.HTTP_201_CREATED)

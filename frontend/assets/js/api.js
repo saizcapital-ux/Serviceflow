@@ -84,6 +84,8 @@ export const api = {
   scheduleVisit: (id, b) => request(`/api/work-orders/${id}/schedule`, { method: "POST", body: b }),
   users: (role) => request(`/api/users${role ? `?role=${role}` : ""}`),
   addFinding: (id, b) => request(`/api/work-orders/${id}/findings`, { method: "POST", body: b }),
+  addNote: (id, message, visibleToCustomer) =>
+    request(`/api/work-orders/${id}/notes`, { method: "POST", body: { message, visible_to_customer: !!visibleToCustomer } }),
   createQuote: (id, b) => request(`/api/work-orders/${id}/quotes`, { method: "POST", body: b }),
   // labor & costing
   logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),

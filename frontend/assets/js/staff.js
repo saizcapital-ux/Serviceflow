@@ -372,7 +372,16 @@ async function renderWorkOrder(id) {
               <dt>Approval limit</dt><dd>${w.customer?.approval_limit != null ? money(w.customer.approval_limit) : '<span class="muted">none</span>'}</dd></dl>
           </div></div>
         <div class="card"><div class="card-head"><h3>Timeline</h3></div>
-          <div class="card-body"><ul class="timeline">${timeline}</ul></div></div>
+          <div class="card-body">
+            <div class="stack" style="margin-bottom:14px">
+              <textarea id="noteMsg" rows="2" placeholder="Add a note to this job…"
+                style="width:100%;resize:vertical"></textarea>
+              <div class="spread">
+                <label class="row" style="gap:6px;font-size:.85rem;cursor:pointer">
+                  <input type="checkbox" id="noteVisible" /> Share with customer (emails them)</label>
+                <button class="btn btn-primary btn-sm" id="addNote">Add note</button></div>
+            </div>
+            <ul class="timeline">${timeline}</ul></div></div>
       </div>
     </div>`;
 
@@ -381,6 +390,15 @@ async function renderWorkOrder(id) {
     openAuthed(`/api/work-orders/${w.id}/traveler.pdf`).catch((e) => toast(e.message, "err")));
   el("#advance").addEventListener("click", () => openStatusMenu(w));
   el("#addFinding").addEventListener("click", () => openFinding(w.id));
+  el("#addNote").addEventListener("click", async () => {
+    const msg = el("#noteMsg").value.trim();
+    if (!msg) return toast("Enter a note", "err");
+    try {
+      await api.addNote(w.id, msg, el("#noteVisible").checked);
+      toast("Note added", "ok");
+      renderWorkOrder(w.id);
+    } catch (e) { toast(e.message, "err"); }
+  });
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
   el("#logTime").addEventListener("click", () => openLogTime(w.id));
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
