@@ -152,6 +152,7 @@ async function router() {
     if (route === "notifications") return renderNotifications();
     if (route === "audit") return renderAudit();
     if (route === "team") return renderTeam();
+    if (route === "account") return renderAccount();
     if (route === "developer") return renderDeveloper();
     if (route === "billing") return renderBilling();
     if (route === "analytics") return renderAnalytics();
@@ -217,12 +218,17 @@ function emptyRow(cols) { return `<tr><td colspan="${cols}" class="muted" style=
 async function renderWorkOrders(params = {}, title = "Work Orders") {
   loading();
   const list = await api.workOrders({ ...params, ...locParam() });
+  const mine = !!params.assigned_to;
   const filterBar = `
     <div class="row wrap" style="margin-bottom:16px">
       ${["", "intake", "inspection", "quote_pending", "approved", "in_repair", "testing", "ready"]
         .map((s) => `<button class="btn btn-ghost btn-sm filter ${s === (params.status || "") ? "active" : ""}"
           data-status="${s}" style="${s === (params.status || "") ? "border-color:var(--brand-500);color:var(--brand-700)" : ""}">
           ${s ? STATUS_LABEL[s] : "All"}</button>`).join("")}
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" id="mineToggle"
+        style="${mine ? "border-color:var(--brand-500);color:var(--brand-700)" : ""}">
+        ${mine ? "✓ " : ""}👤 Assigned to me</button>
     </div>`;
   view.innerHTML = `
     <div class="page-title"><h1>${title}</h1>
@@ -245,9 +251,14 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
   el("#pgNew").addEventListener("click", openNewWorkOrder);
   el("#exportWo").addEventListener("click", () =>
     downloadAuthed("/api/work-orders/export.csv", "work-orders.csv").catch((e) => toast(e.message, "err")));
+  const keepMine = params.assigned_to ? { assigned_to: params.assigned_to } : {};
   els(".filter").forEach((b) => b.addEventListener("click", () => {
-    const s = b.dataset.status; renderWorkOrders(s ? { status: s } : {}, "Work Orders");
+    const s = b.dataset.status; renderWorkOrders({ ...keepMine, ...(s ? { status: s } : {}) }, "Work Orders");
   }));
+  el("#mineToggle")?.addEventListener("click", () => {
+    const keepStatus = params.status ? { status: params.status } : {};
+    renderWorkOrders(mine ? keepStatus : { ...keepStatus, assigned_to: (auth.user || {}).id }, "Work Orders");
+  });
   wireWoRows();
   hydrateEquipment();
 }
@@ -361,7 +372,16 @@ async function renderWorkOrder(id) {
               <dt>Approval limit</dt><dd>${w.customer?.approval_limit != null ? money(w.customer.approval_limit) : '<span class="muted">none</span>'}</dd></dl>
           </div></div>
         <div class="card"><div class="card-head"><h3>Timeline</h3></div>
-          <div class="card-body"><ul class="timeline">${timeline}</ul></div></div>
+          <div class="card-body">
+            <div class="stack" style="margin-bottom:14px">
+              <textarea id="noteMsg" rows="2" placeholder="Add a note to this job…"
+                style="width:100%;resize:vertical"></textarea>
+              <div class="spread">
+                <label class="row" style="gap:6px;font-size:.85rem;cursor:pointer">
+                  <input type="checkbox" id="noteVisible" /> Share with customer (emails them)</label>
+                <button class="btn btn-primary btn-sm" id="addNote">Add note</button></div>
+            </div>
+            <ul class="timeline">${timeline}</ul></div></div>
       </div>
     </div>`;
 
@@ -370,6 +390,15 @@ async function renderWorkOrder(id) {
     openAuthed(`/api/work-orders/${w.id}/traveler.pdf`).catch((e) => toast(e.message, "err")));
   el("#advance").addEventListener("click", () => openStatusMenu(w));
   el("#addFinding").addEventListener("click", () => openFinding(w.id));
+  el("#addNote").addEventListener("click", async () => {
+    const msg = el("#noteMsg").value.trim();
+    if (!msg) return toast("Enter a note", "err");
+    try {
+      await api.addNote(w.id, msg, el("#noteVisible").checked);
+      toast("Note added", "ok");
+      renderWorkOrder(w.id);
+    } catch (e) { toast(e.message, "err"); }
+  });
   el("#addQuote").addEventListener("click", () => openQuote(w.id));
   el("#logTime").addEventListener("click", () => openLogTime(w.id));
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
@@ -1513,11 +1542,32 @@ const INVITE_STATUS_CLASS = {
 
 async function renderTeam() {
   loading();
-  const [members, invites] = await Promise.all([api.users(), api.invites()]);
-  const memberRows = members.map((m) => `<tr data-nostyle>
-    <td><strong>${esc(m.full_name)}</strong></td>
-    <td>${esc(ROLE_LABELS[m.role] || m.role)}</td></tr>`).join("") ||
-    '<tr><td colspan="2" class="muted" style="text-align:center;padding:20px">No teammates yet.</td></tr>';
+  const [members, invites] = await Promise.all([api.members(), api.invites()]);
+  const meId = (auth.user || {}).id;
+  const iAmOwner = (auth.user || {}).role === "owner";
+  const roleOpts = (sel) => ["owner", "manager", "service_writer", "technician"]
+    .map((r) => `<option value="${r}" ${r === sel ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("");
+  const memberRows = members.map((m) => {
+    const isMe = m.id === meId;
+    // You can't edit yourself here; managers can't administer owners.
+    const locked = isMe || (!iAmOwner && m.role === "owner");
+    const roleCell = locked
+      ? `${esc(ROLE_LABELS[m.role] || m.role)}${isMe ? ' <span class="muted">(you)</span>' : ""}`
+      : `<select class="role-sel" data-member="${m.id}" style="padding:.3rem .4rem">${roleOpts(m.role)}</select>`;
+    const statusCell = m.is_active
+      ? '<span class="badge status ready">active</span>'
+      : '<span class="badge status cancelled">inactive</span>';
+    const action = locked ? "" : (m.is_active
+      ? `<button class="btn btn-ghost btn-sm" data-deactivate="${m.id}">Deactivate</button>`
+      : `<button class="btn btn-ghost btn-sm" data-activate="${m.id}">Reactivate</button>`);
+    return `<tr data-nostyle${m.is_active ? "" : ' style="opacity:.6"'}>
+      <td><strong>${esc(m.full_name)}</strong></td>
+      <td class="muted">${esc(m.email)}</td>
+      <td>${roleCell}</td>
+      <td>${statusCell}</td>
+      <td class="text-right">${action}</td></tr>`;
+  }).join("") ||
+    '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">No teammates yet.</td></tr>';
 
   const inviteRows = invites.map((i) => {
     const cls = INVITE_STATUS_CLASS[i.status] || "intake";
@@ -1535,9 +1585,10 @@ async function renderTeam() {
   view.innerHTML = `
     <div class="page-title"><h1>Team</h1><span class="muted">Invite staff and manage access</span></div>
 
-    <div class="card" style="margin-bottom:20px"><div class="card-head"><h3>Members</h3></div>
+    <div class="card" style="margin-bottom:20px"><div class="card-head"><h3>Members</h3>
+      <span class="muted" style="font-size:.82rem">Change a role or deactivate access</span></div>
       <div class="card-body"><div class="table-wrap"><table class="data">
-        <thead><tr><th>Name</th><th>Role</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
         <tbody>${memberRows}</tbody></table></div></div></div>
 
     <div class="card"><div class="card-head"><h3>Invitations</h3>
@@ -1549,6 +1600,19 @@ async function renderTeam() {
           <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Invited by</th><th>When</th><th></th></tr></thead>
           <tbody>${inviteRows}</tbody></table></div></div></div>`;
 
+  els(".role-sel").forEach((sel) => sel.addEventListener("change", async () => {
+    try { await api.updateMember(sel.dataset.member, { role: sel.value }); toast("Role updated", "ok"); renderTeam(); }
+    catch (e) { toast(e.message, "err"); renderTeam(); }
+  }));
+  els("[data-deactivate]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Deactivate this member? They will lose access until reactivated.")) return;
+    try { await api.updateMember(b.dataset.deactivate, { is_active: false }); toast("Member deactivated", ""); renderTeam(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+  els("[data-activate]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api.updateMember(b.dataset.activate, { is_active: true }); toast("Member reactivated", "ok"); renderTeam(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
   el("#newInvite").addEventListener("click", openInvite);
   els("[data-revoke-invite]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Revoke this invitation? The link will stop working.")) return;
@@ -1580,6 +1644,54 @@ function openInvite() {
       renderTeam();
     } catch (ex) { toast(ex.message, "err"); }
   };
+}
+
+/* ---------- account settings ---------- */
+async function renderAccount() {
+  const u = auth.user || {};
+  view.innerHTML = `
+    <div class="page-title"><h1>Account settings</h1><span class="muted">Manage your profile and password</span></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;align-items:start;gap:16px">
+      <div class="card"><div class="card-head"><h3>Profile</h3></div>
+        <div class="card-body stack">
+          <label class="field"><span>Email</span><input value="${esc(u.email || "")}" disabled /></label>
+          <label class="field"><span>Role</span><input value="${esc((ROLE_LABELS[u.role] || u.role || ""))}" disabled /></label>
+          <label class="field"><span>Display name</span><input id="acctName" value="${esc(u.full_name || "")}" /></label>
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-primary" id="saveProfile">Save profile</button></div>
+        </div></div>
+
+      <div class="card"><div class="card-head"><h3>Change password</h3></div>
+        <div class="card-body stack">
+          <label class="field"><span>Current password</span><input id="curPw" type="password" autocomplete="current-password" /></label>
+          <label class="field"><span>New password</span><input id="newPw" type="password" autocomplete="new-password" minlength="8" />
+            <small class="muted" style="font-size:.78rem">At least 8 characters.</small></label>
+          <label class="field"><span>Confirm new password</span><input id="confPw" type="password" autocomplete="new-password" /></label>
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-primary" id="savePw">Update password</button></div>
+        </div></div>
+    </div>`;
+
+  el("#saveProfile").addEventListener("click", async () => {
+    const name = el("#acctName").value.trim();
+    if (!name) return toast("Name cannot be empty", "err");
+    try {
+      const updated = await api.updateProfile(name);
+      auth.save(auth.token, updated);           // keep session token, refresh cached user
+      el("#whoName").textContent = updated.full_name;
+      toast("Profile updated", "ok");
+    } catch (e) { toast(e.message, "err"); }
+  });
+
+  el("#savePw").addEventListener("click", async () => {
+    const cur = el("#curPw").value, next = el("#newPw").value, conf = el("#confPw").value;
+    if (!cur) return toast("Enter your current password", "err");
+    if (next.length < 8) return toast("New password must be at least 8 characters", "err");
+    if (next !== conf) return toast("New passwords don't match", "err");
+    try {
+      await api.changePassword(cur, next);
+      el("#curPw").value = el("#newPw").value = el("#confPw").value = "";
+      toast("Password updated", "ok");
+    } catch (e) { toast(e.message, "err"); }
+  });
 }
 
 function openNewKey() {

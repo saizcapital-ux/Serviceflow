@@ -34,9 +34,16 @@ export const api = {
   // auth
   login: (email, password) => request("/api/auth/login", { method: "POST", body: { email, password }, auth: false }),
   me: () => request("/api/auth/me"),
+  // account (self-service)
+  updateProfile: (fullName) => request("/api/auth/me", { method: "PATCH", body: { full_name: fullName } }),
+  changePassword: (currentPassword, newPassword) =>
+    request("/api/auth/change-password", { method: "POST", body: { current_password: currentPassword, new_password: newPassword } }),
   // password reset (public)
   forgotPassword: (email) => request("/api/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
   resetPassword: (token, password) => request("/api/auth/reset-password", { method: "POST", body: { token, password }, auth: false }),
+  // team members (owner/manager)
+  members: () => request("/api/team/members"),
+  updateMember: (id, body) => request(`/api/team/members/${id}`, { method: "PATCH", body }),
   // team invitations
   invites: () => request("/api/invites"),
   createInvite: (email, role) => request("/api/invites", { method: "POST", body: { email, role } }),
@@ -77,6 +84,8 @@ export const api = {
   scheduleVisit: (id, b) => request(`/api/work-orders/${id}/schedule`, { method: "POST", body: b }),
   users: (role) => request(`/api/users${role ? `?role=${role}` : ""}`),
   addFinding: (id, b) => request(`/api/work-orders/${id}/findings`, { method: "POST", body: b }),
+  addNote: (id, message, visibleToCustomer) =>
+    request(`/api/work-orders/${id}/notes`, { method: "POST", body: { message, visible_to_customer: !!visibleToCustomer } }),
   createQuote: (id, b) => request(`/api/work-orders/${id}/quotes`, { method: "POST", body: b }),
   // labor & costing
   logTime: (woId, b) => request(`/api/work-orders/${woId}/time-entries`, { method: "POST", body: b }),
