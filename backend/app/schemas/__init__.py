@@ -86,6 +86,26 @@ class InviteAccept(BaseModel):
     password: str = Field(min_length=8, max_length=200)
 
 
+class TeamMemberOut(ORMModel):
+    id: int
+    full_name: str
+    email: EmailStr
+    role: UserRole
+    is_active: bool
+
+
+class TeamMemberUpdate(BaseModel):
+    role: UserRole | None = None
+    is_active: bool | None = None
+
+    @field_validator("role")
+    @classmethod
+    def _staff_role_only(cls, v: UserRole | None) -> UserRole | None:
+        if v is not None and v not in _INVITABLE_ROLES:
+            raise ValueError("Role must be a staff role (owner, manager, service_writer, technician).")
+        return v
+
+
 class UpdateProfileRequest(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
 

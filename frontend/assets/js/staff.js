@@ -1514,11 +1514,32 @@ const INVITE_STATUS_CLASS = {
 
 async function renderTeam() {
   loading();
-  const [members, invites] = await Promise.all([api.users(), api.invites()]);
-  const memberRows = members.map((m) => `<tr data-nostyle>
-    <td><strong>${esc(m.full_name)}</strong></td>
-    <td>${esc(ROLE_LABELS[m.role] || m.role)}</td></tr>`).join("") ||
-    '<tr><td colspan="2" class="muted" style="text-align:center;padding:20px">No teammates yet.</td></tr>';
+  const [members, invites] = await Promise.all([api.members(), api.invites()]);
+  const meId = (auth.user || {}).id;
+  const iAmOwner = (auth.user || {}).role === "owner";
+  const roleOpts = (sel) => ["owner", "manager", "service_writer", "technician"]
+    .map((r) => `<option value="${r}" ${r === sel ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("");
+  const memberRows = members.map((m) => {
+    const isMe = m.id === meId;
+    // You can't edit yourself here; managers can't administer owners.
+    const locked = isMe || (!iAmOwner && m.role === "owner");
+    const roleCell = locked
+      ? `${esc(ROLE_LABELS[m.role] || m.role)}${isMe ? ' <span class="muted">(you)</span>' : ""}`
+      : `<select class="role-sel" data-member="${m.id}" style="padding:.3rem .4rem">${roleOpts(m.role)}</select>`;
+    const statusCell = m.is_active
+      ? '<span class="badge status ready">active</span>'
+      : '<span class="badge status cancelled">inactive</span>';
+    const action = locked ? "" : (m.is_active
+      ? `<button class="btn btn-ghost btn-sm" data-deactivate="${m.id}">Deactivate</button>`
+      : `<button class="btn btn-ghost btn-sm" data-activate="${m.id}">Reactivate</button>`);
+    return `<tr data-nostyle${m.is_active ? "" : ' style="opacity:.6"'}>
+      <td><strong>${esc(m.full_name)}</strong></td>
+      <td class="muted">${esc(m.email)}</td>
+      <td>${roleCell}</td>
+      <td>${statusCell}</td>
+      <td class="text-right">${action}</td></tr>`;
+  }).join("") ||
+    '<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">No teammates yet.</td></tr>';
 
   const inviteRows = invites.map((i) => {
     const cls = INVITE_STATUS_CLASS[i.status] || "intake";
@@ -1536,9 +1557,10 @@ async function renderTeam() {
   view.innerHTML = `
     <div class="page-title"><h1>Team</h1><span class="muted">Invite staff and manage access</span></div>
 
-    <div class="card" style="margin-bottom:20px"><div class="card-head"><h3>Members</h3></div>
+    <div class="card" style="margin-bottom:20px"><div class="card-head"><h3>Members</h3>
+      <span class="muted" style="font-size:.82rem">Change a role or deactivate access</span></div>
       <div class="card-body"><div class="table-wrap"><table class="data">
-        <thead><tr><th>Name</th><th>Role</th></tr></thead>
+        <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th></th></tr></thead>
         <tbody>${memberRows}</tbody></table></div></div></div>
 
     <div class="card"><div class="card-head"><h3>Invitations</h3>
@@ -1550,6 +1572,19 @@ async function renderTeam() {
           <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Invited by</th><th>When</th><th></th></tr></thead>
           <tbody>${inviteRows}</tbody></table></div></div></div>`;
 
+  els(".role-sel").forEach((sel) => sel.addEventListener("change", async () => {
+    try { await api.updateMember(sel.dataset.member, { role: sel.value }); toast("Role updated", "ok"); renderTeam(); }
+    catch (e) { toast(e.message, "err"); renderTeam(); }
+  }));
+  els("[data-deactivate]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Deactivate this member? They will lose access until reactivated.")) return;
+    try { await api.updateMember(b.dataset.deactivate, { is_active: false }); toast("Member deactivated", ""); renderTeam(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+  els("[data-activate]").forEach((b) => b.addEventListener("click", async () => {
+    try { await api.updateMember(b.dataset.activate, { is_active: true }); toast("Member reactivated", "ok"); renderTeam(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
   el("#newInvite").addEventListener("click", openInvite);
   els("[data-revoke-invite]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Revoke this invitation? The link will stop working.")) return;

@@ -41,6 +41,9 @@ export const api = {
   // password reset (public)
   forgotPassword: (email) => request("/api/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
   resetPassword: (token, password) => request("/api/auth/reset-password", { method: "POST", body: { token, password }, auth: false }),
+  // team members (owner/manager)
+  members: () => request("/api/team/members"),
+  updateMember: (id, body) => request(`/api/team/members/${id}`, { method: "PATCH", body }),
   // team invitations
   invites: () => request("/api/invites"),
   createInvite: (email, role) => request("/api/invites", { method: "POST", body: { email, role } }),
