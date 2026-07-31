@@ -218,12 +218,17 @@ function emptyRow(cols) { return `<tr><td colspan="${cols}" class="muted" style=
 async function renderWorkOrders(params = {}, title = "Work Orders") {
   loading();
   const list = await api.workOrders({ ...params, ...locParam() });
+  const mine = !!params.assigned_to;
   const filterBar = `
     <div class="row wrap" style="margin-bottom:16px">
       ${["", "intake", "inspection", "quote_pending", "approved", "in_repair", "testing", "ready"]
         .map((s) => `<button class="btn btn-ghost btn-sm filter ${s === (params.status || "") ? "active" : ""}"
           data-status="${s}" style="${s === (params.status || "") ? "border-color:var(--brand-500);color:var(--brand-700)" : ""}">
           ${s ? STATUS_LABEL[s] : "All"}</button>`).join("")}
+      <span style="flex:1"></span>
+      <button class="btn btn-ghost btn-sm" id="mineToggle"
+        style="${mine ? "border-color:var(--brand-500);color:var(--brand-700)" : ""}">
+        ${mine ? "✓ " : ""}👤 Assigned to me</button>
     </div>`;
   view.innerHTML = `
     <div class="page-title"><h1>${title}</h1>
@@ -246,9 +251,14 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
   el("#pgNew").addEventListener("click", openNewWorkOrder);
   el("#exportWo").addEventListener("click", () =>
     downloadAuthed("/api/work-orders/export.csv", "work-orders.csv").catch((e) => toast(e.message, "err")));
+  const keepMine = params.assigned_to ? { assigned_to: params.assigned_to } : {};
   els(".filter").forEach((b) => b.addEventListener("click", () => {
-    const s = b.dataset.status; renderWorkOrders(s ? { status: s } : {}, "Work Orders");
+    const s = b.dataset.status; renderWorkOrders({ ...keepMine, ...(s ? { status: s } : {}) }, "Work Orders");
   }));
+  el("#mineToggle")?.addEventListener("click", () => {
+    const keepStatus = params.status ? { status: params.status } : {};
+    renderWorkOrders(mine ? keepStatus : { ...keepStatus, assigned_to: (auth.user || {}).id }, "Work Orders");
+  });
   wireWoRows();
   hydrateEquipment();
 }

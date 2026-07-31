@@ -82,6 +82,7 @@ def list_work_orders(
     customer_id: int | None = None,
     equipment_id: int | None = None,
     location_id: int | None = None,
+    assigned_to: int | None = None,
     open_only: bool = False,
     db: Session = Depends(get_db),
     user: User = Depends(require_staff),
@@ -91,6 +92,8 @@ def list_work_orders(
         stmt = stmt.where(WorkOrder.status == status_filter)
     if open_only:
         stmt = stmt.where(WorkOrder.status.in_(workflow.OPEN_STATUSES))
+    if assigned_to:
+        stmt = stmt.where(WorkOrder.assigned_to == assigned_to)
     if customer_id:
         stmt = stmt.where(WorkOrder.customer_id == customer_id)
     if equipment_id:
