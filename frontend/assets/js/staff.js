@@ -152,6 +152,7 @@ async function router() {
     if (route === "notifications") return renderNotifications();
     if (route === "audit") return renderAudit();
     if (route === "team") return renderTeam();
+    if (route === "account") return renderAccount();
     if (route === "developer") return renderDeveloper();
     if (route === "billing") return renderBilling();
     if (route === "analytics") return renderAnalytics();
@@ -1580,6 +1581,54 @@ function openInvite() {
       renderTeam();
     } catch (ex) { toast(ex.message, "err"); }
   };
+}
+
+/* ---------- account settings ---------- */
+async function renderAccount() {
+  const u = auth.user || {};
+  view.innerHTML = `
+    <div class="page-title"><h1>Account settings</h1><span class="muted">Manage your profile and password</span></div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;align-items:start;gap:16px">
+      <div class="card"><div class="card-head"><h3>Profile</h3></div>
+        <div class="card-body stack">
+          <label class="field"><span>Email</span><input value="${esc(u.email || "")}" disabled /></label>
+          <label class="field"><span>Role</span><input value="${esc((ROLE_LABELS[u.role] || u.role || ""))}" disabled /></label>
+          <label class="field"><span>Display name</span><input id="acctName" value="${esc(u.full_name || "")}" /></label>
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-primary" id="saveProfile">Save profile</button></div>
+        </div></div>
+
+      <div class="card"><div class="card-head"><h3>Change password</h3></div>
+        <div class="card-body stack">
+          <label class="field"><span>Current password</span><input id="curPw" type="password" autocomplete="current-password" /></label>
+          <label class="field"><span>New password</span><input id="newPw" type="password" autocomplete="new-password" minlength="8" />
+            <small class="muted" style="font-size:.78rem">At least 8 characters.</small></label>
+          <label class="field"><span>Confirm new password</span><input id="confPw" type="password" autocomplete="new-password" /></label>
+          <div class="row" style="justify-content:flex-end"><button class="btn btn-primary" id="savePw">Update password</button></div>
+        </div></div>
+    </div>`;
+
+  el("#saveProfile").addEventListener("click", async () => {
+    const name = el("#acctName").value.trim();
+    if (!name) return toast("Name cannot be empty", "err");
+    try {
+      const updated = await api.updateProfile(name);
+      auth.save(auth.token, updated);           // keep session token, refresh cached user
+      el("#whoName").textContent = updated.full_name;
+      toast("Profile updated", "ok");
+    } catch (e) { toast(e.message, "err"); }
+  });
+
+  el("#savePw").addEventListener("click", async () => {
+    const cur = el("#curPw").value, next = el("#newPw").value, conf = el("#confPw").value;
+    if (!cur) return toast("Enter your current password", "err");
+    if (next.length < 8) return toast("New password must be at least 8 characters", "err");
+    if (next !== conf) return toast("New passwords don't match", "err");
+    try {
+      await api.changePassword(cur, next);
+      el("#curPw").value = el("#newPw").value = el("#confPw").value = "";
+      toast("Password updated", "ok");
+    } catch (e) { toast(e.message, "err"); }
+  });
 }
 
 function openNewKey() {

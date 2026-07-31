@@ -18,10 +18,12 @@ from app.core.security import (
 )
 from app.models import PasswordResetToken, User
 from app.schemas import (
+    ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
     ResetPasswordRequest,
     TokenResponse,
+    UpdateProfileRequest,
     UserOut,
 )
 from app.services import audit, notifications
@@ -74,6 +76,47 @@ def login_form(request: Request, form: OAuth2PasswordRequestForm = Depends(), db
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):
     return user
+
+
+@router.patch("/me", response_model=UserOut)
+def update_profile(
+    payload: UpdateProfileRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Update the signed-in user's own display name."""
+    new_name = payload.full_name.strip()
+    if not new_name:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Name cannot be empty.")
+    user.full_name = new_name
+    audit.record(db, organization_id=user.organization_id, actor=user, action="user.profile_updated",
+                 summary=f"{user.full_name} updated their profile", entity_type="user", entity_id=user.id)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    payload: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Change the signed-in user's own password (requires the current one)."""
+    if not verify_password(payload.current_password, user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Your current password is incorrect.")
+    if verify_password(payload.new_password, user.hashed_password):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "New password must be different from the current one.")
+    user.hashed_password = hash_password(payload.new_password)
+    # Invalidate any outstanding reset tokens now that the password changed.
+    for prt in db.scalars(select(PasswordResetToken).where(
+        PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None)
+    )).all():
+        prt.used_at = datetime.now(timezone.utc)
+    audit.record(db, organization_id=user.organization_id, actor=user, action="user.password_changed",
+                 summary=f"{user.full_name} changed their password", entity_type="user", entity_id=user.id)
+    db.commit()
+    return {"detail": "Password updated."}
 
 
 @router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)

@@ -34,6 +34,10 @@ export const api = {
   // auth
   login: (email, password) => request("/api/auth/login", { method: "POST", body: { email, password }, auth: false }),
   me: () => request("/api/auth/me"),
+  // account (self-service)
+  updateProfile: (fullName) => request("/api/auth/me", { method: "PATCH", body: { full_name: fullName } }),
+  changePassword: (currentPassword, newPassword) =>
+    request("/api/auth/change-password", { method: "POST", body: { current_password: currentPassword, new_password: newPassword } }),
   // password reset (public)
   forgotPassword: (email) => request("/api/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
   resetPassword: (token, password) => request("/api/auth/reset-password", { method: "POST", body: { token, password }, auth: false }),
