@@ -291,6 +291,11 @@ class QuoteDecision(BaseModel):
     po_number: str | None = None
 
 
+class PortalMessageCreate(BaseModel):
+    """A message a customer posts on one of their work orders."""
+    message: str = Field(min_length=1, max_length=2000)
+
+
 class ServiceRequestCreate(BaseModel):
     """A repair request submitted by a customer through the portal."""
     equipment_id: int | None = None

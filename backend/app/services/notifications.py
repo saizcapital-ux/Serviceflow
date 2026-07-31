@@ -206,6 +206,18 @@ def notify_password_reset(
     )
 
 
+def notify_staff_customer_message(db: Session, wo: WorkOrder, customer_name: str, message: str) -> None:
+    """Email the shop's intake staff that a customer replied on a work order."""
+    excerpt = message if len(message) <= 240 else message[:237] + "…"
+    _notify_intake_staff(
+        db, wo,
+        subject=f"New message on {wo.number} from {customer_name}",
+        body=(f"{customer_name} posted a message on work order {wo.number} ({wo.title}):\n\n"
+              f"  \"{excerpt}\"\n\n"
+              f"Open it in Serviceflow to reply.\n"),
+    )
+
+
 def notify_quote_sent(db: Session, wo: WorkOrder, quote_number: str, total: float) -> None:
     email = _customer_email(db, wo.customer_id)
     if not email:

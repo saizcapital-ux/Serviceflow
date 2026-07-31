@@ -158,8 +158,15 @@ async function renderDetail(id) {
     <div class="card card-pad" style="margin-bottom:18px">${bigTracker(w.status)}</div>
     ${pendingQuote ? quoteApprovalCard(pendingQuote, w, overLimit, limit) : ""}
     <div class="grid" style="grid-template-columns:1.4fr 1fr">
-      <div class="card"><div class="card-head"><h3>Status history</h3></div>
-        <div class="card-body"><ul class="timeline">${timeline}</ul></div></div>
+      <div class="card"><div class="card-head"><h3>Activity &amp; messages</h3></div>
+        <div class="card-body">
+          <div class="stack" style="margin-bottom:14px">
+            <textarea id="msgBox" rows="2" placeholder="Send a message to the service center…"
+              style="width:100%;resize:vertical"></textarea>
+            <div class="row" style="justify-content:flex-end">
+              <button class="btn btn-primary btn-sm" id="sendMsg">Send message</button></div>
+          </div>
+          <ul class="timeline">${timeline}</ul></div></div>
       <div class="stack">
         <div class="card"><div class="card-head"><h3>Equipment</h3></div>
           <div class="card-body">${eq ? `
@@ -188,6 +195,12 @@ async function renderDetail(id) {
   if (rj) rj.addEventListener("click", () => decide(pendingQuote.id, false, id, false));
   const wd = el("#withdrawBtn");
   if (wd) wd.addEventListener("click", () => withdraw(id));
+  el("#sendMsg")?.addEventListener("click", async () => {
+    const msg = el("#msgBox").value.trim();
+    if (!msg) return toast("Enter a message", "err");
+    try { await api.postPortalMessage(id, msg); toast("Message sent", "ok"); renderDetail(id); }
+    catch (e) { toast(e.message, "err"); }
+  });
   els("[data-inv]").forEach((b) =>
     b.addEventListener("click", () => openPdf(b.dataset.inv).catch((e) => toast(e.message, "err"))));
   els("[data-att]").forEach((b) =>

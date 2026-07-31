@@ -22,6 +22,7 @@ from app.schemas import (
     EquipmentOut,
     EventOut,
     InvoiceOut,
+    PortalMessageCreate,
     QuoteDecision,
     QuoteOut,
     ServiceRequestCreate,
@@ -76,6 +77,38 @@ def my_work_order_detail(wo_id: int, db: Session = Depends(get_db), user: User =
     # Hide internal-only events from the customer.
     wo.events = [e for e in wo.events if e.visible_to_customer]
     return wo
+
+
+@router.post("/work-orders/{wo_id}/messages", response_model=WorkOrderDetail, status_code=status.HTTP_201_CREATED)
+def post_message(
+    wo_id: int, payload: PortalMessageCreate,
+    db: Session = Depends(get_db), user: User = Depends(require_portal),
+):
+    """Let a customer post a message on their own work order; it appears on the
+    timeline and notifies the shop's intake staff."""
+    wo = db.scalar(
+        select(WorkOrder).where(
+            WorkOrder.id == wo_id,
+            WorkOrder.organization_id == user.organization_id,
+            WorkOrder.customer_id == user.customer_id,
+        )
+    )
+    if not wo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Work order not found.")
+
+    db.add(WorkOrderEvent(
+        work_order_id=wo.id, event_type=EventType.note,
+        message=f"{user.full_name}: {payload.message}",
+        created_by=user.id, visible_to_customer=True,
+    ))
+    customer = db.get(Customer, user.customer_id)
+    notifications.notify_staff_customer_message(
+        db, wo, customer.name if customer else user.full_name, payload.message
+    )
+    audit.record(db, organization_id=user.organization_id, actor=user, action="portal.message_posted",
+                 summary=f"Customer message on {wo.number}", entity_type="work_order", entity_id=wo.id)
+    db.commit()
+    return my_work_order_detail(wo.id, db, user)
 
 
 @router.get("/invoices", response_model=list[InvoiceOut])

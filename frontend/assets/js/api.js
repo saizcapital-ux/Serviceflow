@@ -136,6 +136,8 @@ export const api = {
     request(`/api/portal/quotes/${quoteId}/decision`, { method: "POST", body: { approve, note, po_number: poNumber || null } }),
   createServiceRequest: (body) =>
     request("/api/portal/service-requests", { method: "POST", body }),
+  postPortalMessage: (id, message) =>
+    request(`/api/portal/work-orders/${id}/messages`, { method: "POST", body: { message } }),
   withdrawWorkOrder: (id) =>
     request(`/api/portal/work-orders/${id}/withdraw`, { method: "POST" }),
 };
