@@ -153,6 +153,22 @@ def notify_staff_request_withdrawn(db: Session, wo: WorkOrder, customer_name: st
     )
 
 
+def notify_assignment(db: Session, wo: WorkOrder, assignee: User, assigner_name: str) -> None:
+    """Notify a staff member that a work order was assigned to them."""
+    if not assignee or not assignee.email:
+        return
+    record_and_send(
+        db, organization_id=wo.organization_id, customer_id=wo.customer_id, work_order_id=wo.id,
+        recipient=assignee.email,
+        subject=f"You've been assigned {wo.number}",
+        body=(f"Hi {assignee.full_name},\n\n{assigner_name} assigned you to work order "
+              f"{wo.number} ({wo.title}).\n\n"
+              f"  Priority: {wo.priority.value}\n"
+              f"  Status:   {wo.status.value.replace('_', ' ')}\n\n"
+              f"Open it in Serviceflow to get started.\n"),
+    )
+
+
 def notify_invite(
     db: Session,
     *,

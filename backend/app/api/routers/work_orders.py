@@ -130,6 +130,14 @@ def export_work_orders(db: Session = Depends(get_db), user: User = Depends(requi
     )
 
 
+def _notify_if_newly_assigned(db: Session, wo: WorkOrder, previous_assigned_to, actor: User) -> None:
+    """Email + feed-notify the assignee when a work order is newly assigned to
+    someone other than the person making the change."""
+    if wo.assigned_to and wo.assigned_to != previous_assigned_to and wo.assigned_to != actor.id:
+        assignee = db.get(User, wo.assigned_to)
+        notifications.notify_assignment(db, wo, assignee, actor.full_name)
+
+
 @router.post("", response_model=WorkOrderDetail, status_code=status.HTTP_201_CREATED)
 def create_work_order(payload: WorkOrderCreate, db: Session = Depends(get_db), user: User = Depends(require_staff)):
     if payload.equipment_id:
@@ -156,6 +164,7 @@ def create_work_order(payload: WorkOrderCreate, db: Session = Depends(get_db), u
     )
     audit.record(db, organization_id=user.organization_id, actor=user, action="work_order.created",
                  summary=f"Created work order {number} — {wo.title}", entity_type="work_order", entity_id=wo.id)
+    _notify_if_newly_assigned(db, wo, None, user)
     db.commit()
     return _load_detail(db, wo.id, user.organization_id)
 
@@ -187,8 +196,15 @@ def update_work_order(
     wo_id: int, payload: WorkOrderUpdate, db: Session = Depends(get_db), user: User = Depends(require_staff)
 ):
     wo = _load_detail(db, wo_id, user.organization_id)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    previous_assigned_to = wo.assigned_to
+    fields = payload.model_dump(exclude_unset=True)
+    if fields.get("assigned_to") is not None:
+        assignee = db.get(User, fields["assigned_to"])
+        if not assignee or assignee.organization_id != user.organization_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Assigned user not found.")
+    for field, value in fields.items():
         setattr(wo, field, value)
+    _notify_if_newly_assigned(db, wo, previous_assigned_to, user)
     db.commit()
     return _load_detail(db, wo_id, user.organization_id)
 
@@ -226,12 +242,14 @@ def change_status(
 def schedule_visit(wo_id: int, payload: ScheduleRequest, db: Session = Depends(get_db), user: User = Depends(require_staff)):
     """Schedule (or reschedule) a field visit and optionally assign a technician."""
     wo = _load_detail(db, wo_id, user.organization_id)
+    previous_assigned_to = wo.assigned_to
     wo.scheduled_at = payload.scheduled_at
     if payload.assigned_to is not None:
         tech = db.get(User, payload.assigned_to)
         if not tech or tech.organization_id != user.organization_id:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Assigned user not found.")
         wo.assigned_to = payload.assigned_to
+        _notify_if_newly_assigned(db, wo, previous_assigned_to, user)
     when = payload.scheduled_at.strftime("%b %d, %Y %I:%M %p")
     db.add(
         WorkOrderEvent(
