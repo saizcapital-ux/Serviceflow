@@ -33,6 +33,8 @@ async function request(path, { method = "GET", body, auth: needAuth = true } = {
 export const api = {
   // auth
   login: (email, password) => request("/api/auth/login", { method: "POST", body: { email, password }, auth: false }),
+  signup: (organizationName, fullName, email, password) =>
+    request("/api/auth/signup", { method: "POST", body: { organization_name: organizationName, full_name: fullName, email, password }, auth: false }),
   me: () => request("/api/auth/me"),
   // account (self-service)
   updateProfile: (fullName) => request("/api/auth/me", { method: "PATCH", body: { full_name: fullName } }),
