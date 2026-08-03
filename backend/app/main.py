@@ -6,6 +6,7 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.api.routers import (
     analytics,
@@ -133,4 +134,18 @@ app.include_router(portal.router)
 
 @app.get("/health", tags=["system"])
 def health():
+    """Liveness: the process is up (no dependencies checked)."""
     return {"status": "ok", "service": settings.app_name, "environment": settings.environment}
+
+
+@app.get("/ready", tags=["system"])
+def ready():
+    """Readiness: verify the database is reachable. Returns 503 if not, so load
+    balancers and uptime monitors can route/alert correctly."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:  # pragma: no cover - exercised via the error path
+        _access_log.warning("Readiness check failed: %s", exc)
+        return JSONResponse(status_code=503, content={"status": "not_ready", "database": "error"})
+    return {"status": "ready", "database": "ok"}
