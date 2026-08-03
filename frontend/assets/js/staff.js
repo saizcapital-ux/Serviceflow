@@ -175,9 +175,36 @@ async function renderDashboard() {
     .map((s) => `<div class="spread" style="padding:6px 0">${statusBadge(s.status)}
       <strong>${s.count}</strong></div>`).join("");
 
+  // First-run onboarding for a brand-new shop with no jobs yet.
+  const isNewShop = d.recent.length === 0 && d.open_work_orders === 0
+    && d.awaiting_approval === 0 && d.ready_to_ship === 0;
+  const canInvite = ["owner", "manager"].includes((auth.user || {}).role);
+  const firstName = ((auth.user || {}).full_name || "").split(" ")[0];
+  const onboarding = isNewShop ? `
+    <div class="card" style="margin-bottom:22px;border-color:var(--brand-400)">
+      <div class="card-body">
+        <h2 style="margin-bottom:4px">👋 Welcome to Serviceflow${firstName ? ", " + esc(firstName) : ""}!</h2>
+        <p class="muted" style="margin-bottom:16px">Your shop is ready. Three steps to get rolling:</p>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
+            <div style="font-size:1.6rem">🏢</div><strong>1. Add a customer</strong>
+            <p class="muted" style="font-size:.85rem">Create the customer whose equipment you service.</p>
+            <a class="btn btn-ghost btn-sm" href="#/customers" style="align-self:flex-start">Add customer →</a></div></div>
+          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
+            <div style="font-size:1.6rem">🔧</div><strong>2. Create a work order</strong>
+            <p class="muted" style="font-size:.85rem">Track a repair from intake to ship &amp; invoice.</p>
+            <button class="btn btn-primary btn-sm" id="obNewWo" style="align-self:flex-start">New work order →</button></div></div>
+          ${canInvite ? `<div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
+            <div style="font-size:1.6rem">👥</div><strong>3. Invite your team</strong>
+            <p class="muted" style="font-size:.85rem">Bring in service writers and technicians.</p>
+            <a class="btn btn-ghost btn-sm" href="#/team" style="align-self:flex-start">Invite teammate →</a></div></div>` : ""}
+        </div>
+      </div></div>` : "";
+
   view.innerHTML = `
     <div class="page-title"><h1>Dashboard</h1>
       <span class="muted">${fmtDate(new Date())}</span></div>
+    ${onboarding}
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:22px">
       ${stat("Open Work Orders", d.open_work_orders, "", "in the shop &amp; field")}
       ${stat("Rush Jobs", d.rush_jobs, "accent", "need attention")}
@@ -200,6 +227,7 @@ async function renderDashboard() {
         <div class="card-body">${funnel || '<p class="muted">No work orders yet.</p>'}</div>
       </div>
     </div>`;
+  el("#obNewWo")?.addEventListener("click", openNewWorkOrder);
   wireWoRows();
   hydrateEquipment();
 }
