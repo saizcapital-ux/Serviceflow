@@ -55,6 +55,10 @@
         <label class="field"><span>Password</span>
           <input id="password" type="password" required autocomplete="new-password" minlength="8" placeholder="••••••••" />
           <small class="muted" style="font-size:.78rem">At least 8 characters.</small></label>
+        <label class="row" style="gap:8px;align-items:flex-start;font-size:.85rem;color:var(--ink-600)">
+          <input type="checkbox" id="agree" required style="margin-top:3px" />
+          <span>I agree to the <a href="/terms.html" target="_blank" style="color:var(--brand-600)">Terms of Service</a>
+            and <a href="/privacy.html" target="_blank" style="color:var(--brand-600)">Privacy Policy</a>.</span></label>
         <button class="btn btn-primary btn-block" type="submit" id="submitBtn">Create shop &amp; start trial</button>
         <div class="err" id="err"></div>
       </form>
@@ -79,6 +83,9 @@
       const pw = document.getElementById("password").value;
       if (org.length < 2) { err.textContent = "Enter your shop name."; return; }
       if (pw.length < 8) { err.textContent = "Password must be at least 8 characters."; return; }
+      if (!document.getElementById("agree").checked) {
+        err.textContent = "Please accept the Terms and Privacy Policy to continue."; return;
+      }
       btn.disabled = true; btn.textContent = "Creating…";
       try {
         const res = await api.signup(org, name, email, pw);
