@@ -44,3 +44,20 @@ services:
       # and billing redirect URLs. Update if your Netlify site name differs.
       - key: SERVICEFLOW_APP_BASE_URL
         value: "https://serviceflowappv2.netlify.app"
+      # Email (SMTP). Without these, emails (invites, password resets, quotes)
+      # are only logged to the console — set them so mail is actually delivered.
+      # Use a transactional provider (SendGrid, Postmark, Mailgun, SES, …).
+      # Port 587 -> STARTTLS (SMTP_SSL=false); port 465 -> set SMTP_SSL=true.
+      # sync:false keeps secrets out of the blueprint; set values in the dashboard.
+      - key: SERVICEFLOW_SMTP_HOST
+        sync: false
+      - key: SERVICEFLOW_SMTP_PORT
+        value: "587"
+      - key: SERVICEFLOW_SMTP_SSL
+        value: "false"
+      - key: SERVICEFLOW_SMTP_USER
+        sync: false
+      - key: SERVICEFLOW_SMTP_PASSWORD
+        sync: false
+      - key: SERVICEFLOW_EMAIL_FROM
+        sync: false

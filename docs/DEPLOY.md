@@ -119,8 +119,23 @@ and the customer portal — all in the browser.
   subscriptions. Unset, billing runs in mock mode (checkout activates instantly).
 - **S3 attachments** — set `SERVICEFLOW_STORAGE_BACKEND=s3` plus the
   `SERVICEFLOW_S3_*` vars. Unset, files are stored on local disk.
-- **SMTP email** — set `SERVICEFLOW_SMTP_*` to send real status emails. Unset,
-  notifications are recorded and logged to the console.
+- **SMTP email** — **required for launch.** Until it's set, invites, password
+  resets, and quote/status emails are only logged to the console — no one
+  actually receives them. Use a transactional email provider (SendGrid,
+  Postmark, Mailgun, Amazon SES) and set on the Render service:
+
+  | Variable | Example | Notes |
+  |----------|---------|-------|
+  | `SERVICEFLOW_SMTP_HOST` | `smtp.postmarkapp.com` | provider's SMTP host |
+  | `SERVICEFLOW_SMTP_PORT` | `587` | 587 = STARTTLS, 465 = implicit TLS |
+  | `SERVICEFLOW_SMTP_SSL` | `false` | set `true` only for port 465 |
+  | `SERVICEFLOW_SMTP_USER` | *(provider username / API token)* | |
+  | `SERVICEFLOW_SMTP_PASSWORD` | *(provider password / API token)* | |
+  | `SERVICEFLOW_EMAIL_FROM` | `no-reply@yourshop.com` | a verified sender on your domain |
+
+  Verify it's active: `GET /health` returns `"email": "smtp"` once a host is set
+  (it reads `"console"` otherwise). For best deliverability, set up SPF/DKIM for
+  your sending domain with your provider.
 
   > On Render's free tier the API's local disk is **ephemeral** — uploaded
   > attachments are lost on redeploy/restart. Use the S3 backend for durable

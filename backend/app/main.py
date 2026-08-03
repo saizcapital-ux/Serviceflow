@@ -135,7 +135,12 @@ app.include_router(portal.router)
 @app.get("/health", tags=["system"])
 def health():
     """Liveness: the process is up (no dependencies checked)."""
-    return {"status": "ok", "service": settings.app_name, "environment": settings.environment}
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "environment": settings.environment,
+        "email": "smtp" if settings.email_configured else "console",
+    }
 
 
 @app.get("/ready", tags=["system"])
