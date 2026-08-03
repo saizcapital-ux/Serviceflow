@@ -10,3 +10,14 @@
 [build]
   publish = "frontend"
   command = ""
+
+# Baseline security headers for the static frontend. (No Content-Security-Policy
+# here yet: the app uses inline styles/scripts, so a strict CSP needs a
+# dedicated pass to avoid breaking the UI.)
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"

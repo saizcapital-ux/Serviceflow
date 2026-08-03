@@ -16,12 +16,13 @@ from app.core.security import (
     hash_token,
     verify_password,
 )
-from app.models import PasswordResetToken, User
+from app.models import Location, Organization, PasswordResetToken, User, UserRole
 from app.schemas import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
     LoginRequest,
     ResetPasswordRequest,
+    SignupRequest,
     TokenResponse,
     UpdateProfileRequest,
     UserOut,
@@ -31,6 +32,61 @@ from app.services import audit, notifications
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 RESET_TTL_MINUTES = 60
+TRIAL_DAYS = 14
+
+
+def _slugify(name: str) -> str:
+    import re
+    base = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:60] or "shop"
+    return base
+
+
+def _unique_slug(db: Session, name: str) -> str:
+    base = _slugify(name)
+    slug = base
+    n = 2
+    while db.scalar(select(Organization).where(Organization.slug == slug)):
+        suffix = f"-{n}"
+        slug = base[: 60 - len(suffix)] + suffix
+        n += 1
+    return slug
+
+
+@router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+def signup(payload: SignupRequest, request: Request, db: Session = Depends(get_db)):
+    """Register a new organization and its owner, then sign them in."""
+    enforce_login_rate_limit(db, client_ip(request))
+    email = payload.email.lower()
+    # Login resolves users by email globally, so keep emails unique across tenants.
+    if db.scalar(select(User).where(User.email == email)):
+        raise HTTPException(status.HTTP_409_CONFLICT, "That email is already registered — try signing in.")
+
+    org = Organization(
+        name=payload.organization_name.strip(),
+        slug=_unique_slug(db, payload.organization_name),
+        plan="trial", subscription_status="trialing", seats=5,
+        trial_ends_at=datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS),
+    )
+    db.add(org)
+    db.flush()
+
+    owner = User(
+        organization_id=org.id, email=email, hashed_password=hash_password(payload.password),
+        full_name=payload.full_name.strip(), role=UserRole.owner, is_active=True,
+    )
+    db.add(owner)
+    # Give the new tenant a default location so work orders can be created right away.
+    db.add(Location(organization_id=org.id, name="Main Shop", code="MAIN"))
+    db.flush()
+
+    audit.record(db, organization_id=org.id, actor=owner, action="organization.created",
+                 summary=f"{owner.full_name} created organization '{org.name}'",
+                 entity_type="organization", entity_id=org.id)
+    db.commit()
+    db.refresh(owner)
+
+    token = create_access_token(owner.id, {"role": owner.role.value, "org": owner.organization_id})
+    return TokenResponse(access_token=token, user=UserOut.model_validate(owner))
 
 
 def _authenticate(db: Session, email: str, password: str) -> User:

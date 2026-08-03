@@ -30,6 +30,14 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class SignupRequest(BaseModel):
+    """Self-serve registration: creates a new organization + its owner."""
+    organization_name: str = Field(min_length=2, max_length=200)
+    full_name: str = Field(min_length=1, max_length=200)
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=200)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -289,6 +297,11 @@ class QuoteDecision(BaseModel):
     approve: bool
     note: str | None = None
     po_number: str | None = None
+
+
+class PortalMessageCreate(BaseModel):
+    """A message a customer posts on one of their work orders."""
+    message: str = Field(min_length=1, max_length=2000)
 
 
 class ServiceRequestCreate(BaseModel):

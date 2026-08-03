@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" type="image/svg+xml" href="/assets/img/favicon.svg" />
+  <title>Start your shop · Serviceflow</title>
+  <link rel="stylesheet" href="/assets/css/design-system.css" />
+  <script src="/config.js"></script>
+  <style>
+    body { display: grid; place-items: center; min-height: 100vh; padding: 20px;
+      background: linear-gradient(135deg, var(--brand-900), var(--brand-700)); }
+    .auth { width: 100%; max-width: 940px; display: grid; grid-template-columns: 1fr 1.1fr;
+      background: #fff; border-radius: var(--r-xl); overflow: hidden; box-shadow: var(--sh-lg); }
+    .promo { background: linear-gradient(160deg, var(--brand-800), var(--brand-600));
+      color: #eaf2fb; padding: 42px 38px; display: flex; flex-direction: column; }
+    .promo .logo { width: 46px; height: 46px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--brand-400), var(--accent-500));
+      display: grid; place-items: center; font-weight: 800; font-size: 1.4rem; margin-bottom: 26px; color:#fff; }
+    .promo h1 { color: #fff; font-size: 1.8rem; }
+    .promo ul { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 12px; }
+    .promo li { display: flex; gap: 10px; align-items: flex-start; font-size: .95rem; color: #cfe0f2; }
+    .promo li::before { content: "✓"; color: var(--accent-500); font-weight: 800; }
+    .form { padding: 42px 38px; }
+    .err { color: var(--danger); font-size: .88rem; margin-top: 10px; min-height: 1.2em; }
+    .foot { margin-top: 16px; font-size: .88rem; color: var(--ink-500); }
+    .foot a { color: var(--brand-600); }
+    @media (max-width: 760px) { .auth { grid-template-columns: 1fr; } .promo { display: none; } }
+  </style>
+</head>
+<body>
+  <div class="auth">
+    <div class="promo">
+      <div class="logo">S</div>
+      <h1>Run your repair shop on Serviceflow</h1>
+      <ul>
+        <li>Track every motor, valve, pump &amp; actuator repair end to end</li>
+        <li>Send quotes, collect approvals, invoice &amp; get paid</li>
+        <li>Give customers a live status &amp; history portal</li>
+        <li>Free 14-day trial — no credit card required</li>
+      </ul>
+      <div style="flex:1"></div>
+      <small style="color:#93b3d6">© Serviceflow — industrial MRO platform</small>
+    </div>
+    <div class="form">
+      <h2>Create your shop</h2>
+      <p class="muted" style="font-size:.9rem">Set up your workspace in under a minute.</p>
+      <form id="signupForm" class="stack" style="margin-top:12px">
+        <label class="field"><span>Shop / company name</span>
+          <input id="org" required placeholder="Acme Rotating Equipment" /></label>
+        <label class="field"><span>Your name</span>
+          <input id="name" required autocomplete="name" placeholder="Jordan Rivera" /></label>
+        <label class="field"><span>Work email</span>
+          <input id="email" type="email" required autocomplete="username" placeholder="you@company.com" /></label>
+        <label class="field"><span>Password</span>
+          <input id="password" type="password" required autocomplete="new-password" minlength="8" placeholder="••••••••" />
+          <small class="muted" style="font-size:.78rem">At least 8 characters.</small></label>
+        <button class="btn btn-primary btn-block" type="submit" id="submitBtn">Create shop &amp; start trial</button>
+        <div class="err" id="err"></div>
+      </form>
+      <div class="foot">Already have an account? <a href="/login.html">Sign in</a></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api, auth } from "/assets/js/api.js";
+    if (auth.token) location.href = auth.isStaff ? "/app/" : "/portal/";
+
+    const form = document.getElementById("signupForm");
+    const err = document.getElementById("err");
+    const btn = document.getElementById("submitBtn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.textContent = "";
+      const org = document.getElementById("org").value.trim();
+      const name = document.getElementById("name").value.trim();
+      const email = document.getElementById("email").value.trim();
+      const pw = document.getElementById("password").value;
+      if (org.length < 2) { err.textContent = "Enter your shop name."; return; }
+      if (pw.length < 8) { err.textContent = "Password must be at least 8 characters."; return; }
+      btn.disabled = true; btn.textContent = "Creating…";
+      try {
+        const res = await api.signup(org, name, email, pw);
+        auth.save(res.access_token, res.user);
+        location.href = "/app/";
+      } catch (ex) {
+        err.textContent = ex.message || "Could not create your shop.";
+        btn.disabled = false; btn.textContent = "Create shop & start trial";
+      }
+    });
+  </script>
+</body>
+</html>
