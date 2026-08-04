@@ -512,3 +512,24 @@ class LoginAttempt(Base):
     email: Mapped[str | None] = mapped_column(String(255))
     successful: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, index=True)
+
+
+class EquipmentSpecField(Base):
+    """A per-organization template field defining a spec to capture for a given
+    equipment type (e.g. Motor → "Horsepower" (HP), "RPM", "Voltage").
+
+    equipment_type is stored as a plain string (matching EquipmentType values)
+    rather than a DB enum, so migrations don't have to reuse the existing
+    'equipmenttype' Postgres type. Captured values live in
+    Equipment.nameplate_data keyed by the field label.
+    """
+
+    __tablename__ = "equipment_spec_fields"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    equipment_type: Mapped[str] = mapped_column(String(20), index=True)  # matches EquipmentType values
+    label: Mapped[str] = mapped_column(String(80), nullable=False)
+    unit: Mapped[str | None] = mapped_column(String(20))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

@@ -94,6 +94,32 @@ class InviteAccept(BaseModel):
     password: str = Field(min_length=8, max_length=200)
 
 
+class SpecFieldCreate(BaseModel):
+    equipment_type: EquipmentType
+    label: str = Field(min_length=1, max_length=80)
+    unit: str | None = Field(default=None, max_length=20)
+    position: int = 0
+
+    @field_validator("equipment_type", mode="before")
+    @classmethod
+    def _coerce_type(cls, v):
+        return v.value if isinstance(v, EquipmentType) else v
+
+
+class SpecFieldUpdate(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=80)
+    unit: str | None = Field(default=None, max_length=20)
+    position: int | None = None
+
+
+class SpecFieldOut(ORMModel):
+    id: int
+    equipment_type: EquipmentType
+    label: str
+    unit: str | None = None
+    position: int
+
+
 class TeamMemberOut(ORMModel):
     id: int
     full_name: str
