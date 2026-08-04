@@ -1705,7 +1705,7 @@ async function renderSpecTemplates() {
   loading();
   const types = Object.keys(TYPE_LABEL);
   if (!types.includes(specType)) specType = types[0];
-  const fields = await api.specTemplates(specType);
+  const [fields, report] = await Promise.all([api.specTemplates(specType), api.specReport(specType)]);
   const rows = fields.map((f) => `<tr data-nostyle>
     <td><strong>${esc(f.label)}</strong></td>
     <td class="muted">${esc(f.unit || "—")}</td>
@@ -1730,9 +1730,28 @@ async function renderSpecTemplates() {
         <div class="table-wrap"><table class="data">
           <thead><tr><th>Field</th><th>Unit</th><th></th></tr></thead>
           <tbody>${rows}</tbody></table></div>
-      </div></div>`;
+      </div></div>
+
+    <div class="card" style="margin-top:18px"><div class="card-head">
+        <h3>Spec report — ${TYPE_LABEL[specType]}</h3>
+        <button class="btn btn-ghost btn-sm" id="specCsv" ${report.equipment.length ? "" : "disabled"}>⬇ Export CSV</button></div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Tag</th><th>Customer</th><th>Make / Model</th>${report.fields.map((f) => `<th>${esc(f)}</th>`).join("")}</tr></thead>
+        <tbody>${report.equipment.map((e) => `<tr data-eqid="${e.id}">
+          <td class="mono">${esc(e.tag || "—")}</td>
+          <td class="muted">${esc(e.customer || "—")}</td>
+          <td>${esc([e.manufacturer, e.model].filter(Boolean).join(" ") || "—")}</td>
+          ${report.fields.map((f) => `<td>${esc(e.specs[f] || "")}</td>`).join("")}</tr>`).join("") ||
+          `<tr><td colspan="${3 + report.fields.length}" class="muted" style="text-align:center;padding:18px">No ${TYPE_LABEL[specType].toLowerCase()} on file yet.</td></tr>`}
+        </tbody></table></div></div>`;
 
   el("#specTypeSel").addEventListener("change", (e) => { specType = e.target.value; renderSpecTemplates(); });
+  el("#specCsv").addEventListener("click", () =>
+    downloadAuthed(`/api/spec-templates/report.csv?equipment_type=${specType}`, `specs-${specType}.csv`).catch((e) => toast(e.message, "err")));
+  els("tr[data-eqid]").forEach((tr) => tr.addEventListener("click", (e) => {
+    if (e.target.tagName === "A") return;
+    location.hash = `#/equipment/${tr.dataset.eqid}`;
+  }));
   el("#specAdd").addEventListener("click", async () => {
     const label = el("#specLabel").value.trim();
     if (!label) return toast("Enter a field label", "err");

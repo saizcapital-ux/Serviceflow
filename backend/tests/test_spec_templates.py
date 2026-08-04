@@ -48,3 +48,36 @@ def test_spec_fields_are_tenant_scoped(client, staff_headers):
         "email": f"iso-{uuid.uuid4().hex[:8]}@shop.com", "password": "Secret123"}).json()["access_token"]
     h = {"Authorization": f"Bearer {tok}"}
     assert client.get("/api/spec-templates", headers=h).json() == []
+
+
+def _make_motor(client, staff_headers, tag, nameplate):
+    cid = client.get("/api/customers", headers=staff_headers).json()[0]["id"]
+    return client.post("/api/equipment", json={
+        "customer_id": cid, "equipment_type": "motor", "tag": tag, "nameplate_data": nameplate,
+    }, headers=staff_headers)
+
+
+def test_spec_report_columns_and_rows(client, staff_headers):
+    _make_motor(client, staff_headers, "RPT-1", {"Horsepower": "250", "RPM": "1780"})
+    rep = client.get("/api/spec-templates/report?equipment_type=motor", headers=staff_headers)
+    assert rep.status_code == 200
+    body = rep.json()
+    assert "Horsepower" in body["fields"]
+    row = next(e for e in body["equipment"] if e["tag"] == "RPT-1")
+    assert row["specs"]["Horsepower"] == "250"
+    # Every row exposes exactly the template fields (missing values blank).
+    assert set(row["specs"].keys()) == set(body["fields"])
+
+
+def test_spec_report_csv(client, staff_headers):
+    _make_motor(client, staff_headers, "RPT-CSV", {"Horsepower": "60"})
+    r = client.get("/api/spec-templates/report.csv?equipment_type=motor", headers=staff_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/csv")
+    lines = r.text.strip().splitlines()
+    assert lines[0].startswith("Tag,Customer,Manufacturer,Model,Serial,Horsepower")
+    assert any(line.startswith("RPT-CSV,") for line in lines)
+
+
+def test_spec_report_requires_valid_type(client, staff_headers):
+    assert client.get("/api/spec-templates/report?equipment_type=spaceship", headers=staff_headers).status_code == 422
