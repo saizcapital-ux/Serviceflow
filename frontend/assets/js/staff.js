@@ -1086,11 +1086,12 @@ async function renderEquipmentDetail(id) {
     </div>
     <div class="grid" style="grid-template-columns:1.6fr 1fr;align-items:start">
       <div class="stack">
-        <div class="card"><div class="card-head"><h3>Nameplate</h3></div>
+        <div class="card"><div class="card-head"><h3>Nameplate</h3>
+          <button class="btn btn-ghost btn-sm" id="editEq">✎ Edit</button></div>
           <div class="card-body">
             <dl class="kv"><dt>Serial</dt><dd class="mono">${esc(eq.serial_number || "—")}</dd>
               <dt>Location</dt><dd>${esc(eq.location || "—")}</dd></dl>
-            <div class="row wrap" style="margin-top:10px">${nameplate}</div></div></div>
+            <div class="row wrap" style="margin-top:10px">${nameplate || '<span class="muted">No specs captured yet.</span>'}</div></div></div>
         <div class="card"><div class="card-head"><h3>Repair history <span class="badge">${history.length}</span></h3></div>
           <div class="table-wrap"><table class="data">
             <thead><tr><th>WO #</th><th>Title</th><th>Status</th><th>Opened</th></tr></thead>
@@ -1110,6 +1111,50 @@ async function renderEquipmentDetail(id) {
   try { svg = await fetchAuthedText(`/api/equipment/${id}/qr.svg`); el("#qrBox").innerHTML = svg; }
   catch { el("#qrBox").innerHTML = '<span class="muted">QR unavailable</span>'; }
   el("#printLabel").addEventListener("click", () => printLabel(eq, owner, svg));
+  el("#editEq").addEventListener("click", () => openEditEquipment(eq));
+}
+
+async function openEditEquipment(eq) {
+  let fields = [];
+  try { fields = await api.specTemplates(eq.equipment_type); } catch { /* ignore */ }
+  const np = eq.nameplate_data || {};
+  const specInputs = fields.length ? `<div class="muted" style="font-size:.8rem;margin-top:4px">Specs — ${TYPE_LABEL[eq.equipment_type]}</div>
+    <div class="row wrap">${fields.map((f) => `<label class="field grow" style="min-width:140px">
+      <span>${esc(f.label)}${f.unit ? ` (${esc(f.unit)})` : ""}</span>
+      <input data-spec="${esc(f.label)}" value="${esc(np[f.label] || "")}" /></label>`).join("")}</div>` : "";
+  const m = modal(`<div class="card-head"><h3>Edit equipment</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Asset tag</span><input id="eeTag" value="${esc(eq.tag || "")}" /></label>
+      <div class="row">
+        <label class="field grow"><span>Manufacturer</span><input id="eeMfr" value="${esc(eq.manufacturer || "")}" /></label>
+        <label class="field grow"><span>Model</span><input id="eeMod" value="${esc(eq.model || "")}" /></label>
+      </div>
+      <div class="row">
+        <label class="field grow"><span>Serial #</span><input id="eeSer" value="${esc(eq.serial_number || "")}" /></label>
+        <label class="field grow"><span>Location on site</span><input id="eeLoc" value="${esc(eq.location || "")}" /></label>
+      </div>
+      ${specInputs}
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="eeCx">Cancel</button>
+        <button class="btn btn-primary" id="eeOk">Save changes</button></div></div>`);
+  el("#eeCx", m.root).onclick = m.close;
+  el("#eeOk", m.root).onclick = async () => {
+    const nameplate_data = { ...np };  // preserve any keys not in the template
+    els("[data-spec]", m.root).forEach((inp) => {
+      const v = inp.value.trim();
+      if (v) nameplate_data[inp.dataset.spec] = v; else delete nameplate_data[inp.dataset.spec];
+    });
+    try {
+      await api.updateEquipment(eq.id, {
+        tag: el("#eeTag", m.root).value.trim() || null,
+        manufacturer: el("#eeMfr", m.root).value.trim() || null,
+        model: el("#eeMod", m.root).value.trim() || null,
+        serial_number: el("#eeSer", m.root).value.trim() || null,
+        location: el("#eeLoc", m.root).value.trim() || null,
+        nameplate_data,
+      });
+      m.close(); toast("Equipment updated", "ok"); renderEquipmentDetail(eq.id);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function reliabilityCard(history) {

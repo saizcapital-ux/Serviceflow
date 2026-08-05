@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import require_staff
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Contact, Customer, Equipment, User
+from app.models import Contact, Customer, Equipment, Location, User
 from app.schemas import (
     ContactCreate,
     ContactOut,
@@ -15,6 +15,7 @@ from app.schemas import (
     CustomerOut,
     EquipmentCreate,
     EquipmentOut,
+    EquipmentUpdate,
 )
 from app.services.qr import qr_svg
 
@@ -126,6 +127,30 @@ def get_equipment(equipment_id: int, db: Session = Depends(get_db), user: User =
     )
     if not equipment:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
+    return equipment
+
+
+@router.patch("/equipment/{equipment_id}", response_model=EquipmentOut)
+def update_equipment(
+    equipment_id: int, payload: EquipmentUpdate,
+    db: Session = Depends(get_db), user: User = Depends(require_staff),
+):
+    equipment = db.scalar(
+        select(Equipment).where(
+            Equipment.id == equipment_id, Equipment.organization_id == user.organization_id
+        )
+    )
+    if not equipment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
+    fields = payload.model_dump(exclude_unset=True)
+    if fields.get("location_id"):
+        loc = db.get(Location, fields["location_id"])
+        if not loc or loc.organization_id != user.organization_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Branch not found.")
+    for field, value in fields.items():
+        setattr(equipment, field, value)
+    db.commit()
+    db.refresh(equipment)
     return equipment
 
 

@@ -74,6 +74,7 @@ export const api = {
   },
   equipmentOne: (id) => request(`/api/equipment/${id}`),
   createEquipment: (b) => request("/api/equipment", { method: "POST", body: b }),
+  updateEquipment: (id, b) => request(`/api/equipment/${id}`, { method: "PATCH", body: b }),
   // equipment spec templates
   specTemplates: (equipmentType) => request(`/api/spec-templates${equipmentType ? `?equipment_type=${equipmentType}` : ""}`),
   specReport: (equipmentType) => request(`/api/spec-templates/report?equipment_type=${equipmentType}`),
