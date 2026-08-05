@@ -28,6 +28,7 @@ function boot() {
   if (!["owner", "manager"].includes(u.role)) {
     el("#navAudit")?.classList.add("hide");
     el("#navTeam")?.classList.add("hide");
+    el("#navTemplates")?.classList.add("hide");
   }
   if (u.role !== "owner") el("#navDev")?.classList.add("hide");
   els(".nav-link[data-route]").forEach((a) =>
@@ -152,6 +153,7 @@ async function router() {
     if (route === "notifications") return renderNotifications();
     if (route === "audit") return renderAudit();
     if (route === "team") return renderTeam();
+    if (route === "templates") return renderSpecTemplates();
     if (route === "account") return renderAccount();
     if (route === "developer") return renderDeveloper();
     if (route === "billing") return renderBilling();
@@ -175,9 +177,36 @@ async function renderDashboard() {
     .map((s) => `<div class="spread" style="padding:6px 0">${statusBadge(s.status)}
       <strong>${s.count}</strong></div>`).join("");
 
+  // First-run onboarding for a brand-new shop with no jobs yet.
+  const isNewShop = d.recent.length === 0 && d.open_work_orders === 0
+    && d.awaiting_approval === 0 && d.ready_to_ship === 0;
+  const canInvite = ["owner", "manager"].includes((auth.user || {}).role);
+  const firstName = ((auth.user || {}).full_name || "").split(" ")[0];
+  const onboarding = isNewShop ? `
+    <div class="card" style="margin-bottom:22px;border-color:var(--brand-400)">
+      <div class="card-body">
+        <h2 style="margin-bottom:4px">👋 Welcome to Serviceflow${firstName ? ", " + esc(firstName) : ""}!</h2>
+        <p class="muted" style="margin-bottom:16px">Your shop is ready. Three steps to get rolling:</p>
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
+          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
+            <div style="font-size:1.6rem">🏢</div><strong>1. Add a customer</strong>
+            <p class="muted" style="font-size:.85rem">Create the customer whose equipment you service.</p>
+            <a class="btn btn-ghost btn-sm" href="#/customers" style="align-self:flex-start">Add customer →</a></div></div>
+          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
+            <div style="font-size:1.6rem">🔧</div><strong>2. Create a work order</strong>
+            <p class="muted" style="font-size:.85rem">Track a repair from intake to ship &amp; invoice.</p>
+            <button class="btn btn-primary btn-sm" id="obNewWo" style="align-self:flex-start">New work order →</button></div></div>
+          ${canInvite ? `<div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
+            <div style="font-size:1.6rem">👥</div><strong>3. Invite your team</strong>
+            <p class="muted" style="font-size:.85rem">Bring in service writers and technicians.</p>
+            <a class="btn btn-ghost btn-sm" href="#/team" style="align-self:flex-start">Invite teammate →</a></div></div>` : ""}
+        </div>
+      </div></div>` : "";
+
   view.innerHTML = `
     <div class="page-title"><h1>Dashboard</h1>
       <span class="muted">${fmtDate(new Date())}</span></div>
+    ${onboarding}
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:22px">
       ${stat("Open Work Orders", d.open_work_orders, "", "in the shop &amp; field")}
       ${stat("Rush Jobs", d.rush_jobs, "accent", "need attention")}
@@ -200,6 +229,7 @@ async function renderDashboard() {
         <div class="card-body">${funnel || '<p class="muted">No work orders yet.</p>'}</div>
       </div>
     </div>`;
+  el("#obNewWo")?.addEventListener("click", openNewWorkOrder);
   wireWoRows();
   hydrateEquipment();
 }
@@ -959,6 +989,7 @@ async function openNewEquipment(fixedCustomerId) {
           ${Object.keys(TYPE_LABEL).map((t) => `<option value="${t}">${TYPE_LABEL[t]}</option>`).join("")}</select></label>
         <label class="field grow"><span>Asset tag</span><input id="etag" placeholder="MTR-4471" /></label>
       </div>
+      <div id="specFields" class="stack"></div>
       <div class="row">
         <label class="field grow"><span>Manufacturer</span><input id="emfr" /></label>
         <label class="field grow"><span>Model</span><input id="emod" /></label>
@@ -971,15 +1002,37 @@ async function openNewEquipment(fixedCustomerId) {
       <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="ecx">Cancel</button>
         <button class="btn btn-primary" id="eok">Add equipment</button></div></div>`);
   el("#ecx", m.root).onclick = m.close;
+
+  // Render the spec-template fields for the selected equipment type.
+  async function loadSpecFields(type) {
+    const box = el("#specFields", m.root);
+    box.innerHTML = "";
+    let fields = [];
+    try { fields = await api.specTemplates(type); } catch { /* ignore */ }
+    if (!fields.length) return;
+    box.innerHTML = `<div class="muted" style="font-size:.8rem;margin-top:2px">Specs — ${TYPE_LABEL[type] || type}</div>`
+      + '<div class="row wrap">' + fields.map((f) => `
+        <label class="field grow" style="min-width:140px"><span>${esc(f.label)}${f.unit ? ` (${esc(f.unit)})` : ""}</span>
+          <input data-spec="${esc(f.label)}" /></label>`).join("") + "</div>";
+  }
+  loadSpecFields(el("#etype", m.root).value);
+  el("#etype", m.root).addEventListener("change", (e) => loadSpecFields(e.target.value));
+
   el("#eok", m.root).onclick = async () => {
     const customer_id = +(fixedCustomerId || el("#en", m.root).value);
     if (!customer_id) return toast("Customer is required", "err");
+    const nameplate_data = {};
+    els("[data-spec]", m.root).forEach((inp) => {
+      const v = inp.value.trim();
+      if (v) nameplate_data[inp.dataset.spec] = v;
+    });
     try {
       await api.createEquipment({
         customer_id, equipment_type: el("#etype", m.root).value, tag: el("#etag", m.root).value.trim() || null,
         manufacturer: el("#emfr", m.root).value.trim() || null, model: el("#emod", m.root).value.trim() || null,
         serial_number: el("#eser", m.root).value.trim() || null, location: el("#eloc", m.root).value.trim() || null,
         location_id: +(el("#ebranch", m.root)?.value) || null,
+        nameplate_data,
       });
       m.close(); toast("Equipment added", "ok");
       if (fixedCustomerId) renderCustomerDetail(fixedCustomerId); else renderEquipment();
@@ -1644,6 +1697,75 @@ function openInvite() {
       renderTeam();
     } catch (ex) { toast(ex.message, "err"); }
   };
+}
+
+/* ---------- spec templates ---------- */
+let specType = "motor";
+async function renderSpecTemplates() {
+  loading();
+  const types = Object.keys(TYPE_LABEL);
+  if (!types.includes(specType)) specType = types[0];
+  const [fields, report] = await Promise.all([api.specTemplates(specType), api.specReport(specType)]);
+  const rows = fields.map((f) => `<tr data-nostyle>
+    <td><strong>${esc(f.label)}</strong></td>
+    <td class="muted">${esc(f.unit || "—")}</td>
+    <td class="text-right"><button class="btn btn-danger btn-sm" data-del-spec="${f.id}">Remove</button></td></tr>`).join("") ||
+    '<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">No spec fields for this type yet.</td></tr>';
+
+  view.innerHTML = `
+    <div class="page-title"><h1>Spec Templates</h1>
+      <span class="muted">Define the specs captured for each equipment type</span></div>
+    <div class="card"><div class="card-head">
+        <label class="field" style="margin:0"><span class="muted" style="font-size:.78rem">Equipment type</span>
+          <select id="specTypeSel">${types.map((t) => `<option value="${t}" ${t === specType ? "selected" : ""}>${TYPE_LABEL[t]}</option>`).join("")}</select></label>
+      </div>
+      <div class="card-body">
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px">These fields appear on the equipment form and in the spec report
+          for every <strong>${TYPE_LABEL[specType]}</strong>.</p>
+        <div class="row" style="align-items:flex-end;gap:8px;margin-bottom:14px">
+          <label class="field grow" style="max-width:260px"><span>New field label</span><input id="specLabel" placeholder="e.g. Horsepower" /></label>
+          <label class="field" style="max-width:120px"><span>Unit (optional)</span><input id="specUnit" placeholder="HP" /></label>
+          <button class="btn btn-primary" id="specAdd">Add field</button>
+        </div>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Field</th><th>Unit</th><th></th></tr></thead>
+          <tbody>${rows}</tbody></table></div>
+      </div></div>
+
+    <div class="card" style="margin-top:18px"><div class="card-head">
+        <h3>Spec report — ${TYPE_LABEL[specType]}</h3>
+        <button class="btn btn-ghost btn-sm" id="specCsv" ${report.equipment.length ? "" : "disabled"}>⬇ Export CSV</button></div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Tag</th><th>Customer</th><th>Make / Model</th>${report.fields.map((f) => `<th>${esc(f)}</th>`).join("")}</tr></thead>
+        <tbody>${report.equipment.map((e) => `<tr data-eqid="${e.id}">
+          <td class="mono">${esc(e.tag || "—")}</td>
+          <td class="muted">${esc(e.customer || "—")}</td>
+          <td>${esc([e.manufacturer, e.model].filter(Boolean).join(" ") || "—")}</td>
+          ${report.fields.map((f) => `<td>${esc(e.specs[f] || "")}</td>`).join("")}</tr>`).join("") ||
+          `<tr><td colspan="${3 + report.fields.length}" class="muted" style="text-align:center;padding:18px">No ${TYPE_LABEL[specType].toLowerCase()} on file yet.</td></tr>`}
+        </tbody></table></div></div>`;
+
+  el("#specTypeSel").addEventListener("change", (e) => { specType = e.target.value; renderSpecTemplates(); });
+  el("#specCsv").addEventListener("click", () =>
+    downloadAuthed(`/api/spec-templates/report.csv?equipment_type=${specType}`, `specs-${specType}.csv`).catch((e) => toast(e.message, "err")));
+  els("tr[data-eqid]").forEach((tr) => tr.addEventListener("click", (e) => {
+    if (e.target.tagName === "A") return;
+    location.hash = `#/equipment/${tr.dataset.eqid}`;
+  }));
+  el("#specAdd").addEventListener("click", async () => {
+    const label = el("#specLabel").value.trim();
+    if (!label) return toast("Enter a field label", "err");
+    try {
+      await api.createSpecField({ equipment_type: specType, label, unit: el("#specUnit").value.trim() || null,
+        position: fields.length });
+      toast("Field added", "ok"); renderSpecTemplates();
+    } catch (e) { toast(e.message, "err"); }
+  });
+  els("[data-del-spec]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Remove this spec field? Existing equipment data is not deleted.")) return;
+    try { await api.deleteSpecField(b.dataset.delSpec); toast("Field removed", ""); renderSpecTemplates(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
 }
 
 /* ---------- account settings ---------- */

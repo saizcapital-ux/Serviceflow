@@ -26,6 +26,7 @@ from app.api.routers import (
     parts,
     portal,
     search,
+    spec_templates,
     team,
     work_orders,
 )
@@ -121,6 +122,7 @@ app.include_router(team.router)
 app.include_router(team.team_router)
 app.include_router(invites.router)
 app.include_router(search.router)
+app.include_router(spec_templates.router)
 app.include_router(locations.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
@@ -135,7 +137,12 @@ app.include_router(portal.router)
 @app.get("/health", tags=["system"])
 def health():
     """Liveness: the process is up (no dependencies checked)."""
-    return {"status": "ok", "service": settings.app_name, "environment": settings.environment}
+    return {
+        "status": "ok",
+        "service": settings.app_name,
+        "environment": settings.environment,
+        "email": "smtp" if settings.email_configured else "console",
+    }
 
 
 @app.get("/ready", tags=["system"])

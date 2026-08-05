@@ -18,6 +18,7 @@ from app.models import (
     Contact,
     Customer,
     Equipment,
+    EquipmentSpecField,
     EquipmentType,
     EventType,
     Finding,
@@ -75,6 +76,20 @@ def seed(reset_first: bool = True) -> None:
         loc_field = Location(organization_id=org.id, name="Beaumont Branch", code="BMT",
                              address="45 Refinery Row, Beaumont, TX")
         db.add_all([loc_main, loc_field])
+        db.flush()
+
+        # ---- Equipment spec templates (fields to capture per type) ----
+        _spec_defaults = {
+            "motor": [("Horsepower", "HP"), ("RPM", "rpm"), ("Voltage", "V"),
+                      ("Frame", None), ("Enclosure", None), ("Insulation Class", None)],
+            "valve": [("Size", "in"), ("Pressure Class", None), ("Body Material", None),
+                      ("Actuator", None)],
+            "pump": [("Flow", "GPM"), ("Head", "ft"), ("Impeller Dia.", "in"), ("Seal Type", None)],
+        }
+        for _etype, _fields in _spec_defaults.items():
+            for _pos, (_label, _unit) in enumerate(_fields):
+                db.add(EquipmentSpecField(organization_id=org.id, equipment_type=_etype,
+                                          label=_label, unit=_unit, position=_pos))
         db.flush()
 
         # ---- Staff users ----

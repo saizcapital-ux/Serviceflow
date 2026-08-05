@@ -31,7 +31,11 @@ log = logging.getLogger("serviceflow.notifications")
 
 
 def _dispatch_email(recipient: str, subject: str, body: str) -> None:
-    """Send via SMTP if configured, otherwise log (console backend)."""
+    """Send via SMTP if configured, otherwise log (console backend).
+
+    Supports both implicit TLS (SMTP_SSL, port 465) and STARTTLS (port 587),
+    with a connection timeout so a slow mail server can't hang a request.
+    """
     if not settings.smtp_host:
         log.info("[email → %s] %s\n%s", recipient, subject, body)
         return
@@ -39,8 +43,13 @@ def _dispatch_email(recipient: str, subject: str, body: str) -> None:
     msg["Subject"] = subject
     msg["From"] = settings.email_from
     msg["To"] = recipient
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-        server.starttls()
+    if settings.smtp_ssl:
+        server = smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout)
+    else:
+        server = smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout)
+    with server:
+        if not settings.smtp_ssl:
+            server.starttls()
         if settings.smtp_user:
             server.login(settings.smtp_user, settings.smtp_password)
         server.send_message(msg)

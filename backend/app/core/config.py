@@ -40,7 +40,13 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: str = ""
     smtp_password: str = ""
+    smtp_ssl: bool = False  # True for implicit TLS (port 465); else STARTTLS (587)
+    smtp_timeout: int = 15
     email_from: str = "no-reply@serviceflow.app"
+
+    @property
+    def email_configured(self) -> bool:
+        return bool(self.smtp_host)
 
     # Stripe (SaaS subscription billing). If no secret key is set, billing runs
     # in mock mode: checkout activates the plan immediately (great for demos).

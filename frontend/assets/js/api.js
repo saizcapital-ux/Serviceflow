@@ -74,6 +74,12 @@ export const api = {
   },
   equipmentOne: (id) => request(`/api/equipment/${id}`),
   createEquipment: (b) => request("/api/equipment", { method: "POST", body: b }),
+  // equipment spec templates
+  specTemplates: (equipmentType) => request(`/api/spec-templates${equipmentType ? `?equipment_type=${equipmentType}` : ""}`),
+  specReport: (equipmentType) => request(`/api/spec-templates/report?equipment_type=${equipmentType}`),
+  createSpecField: (b) => request("/api/spec-templates", { method: "POST", body: b }),
+  updateSpecField: (id, b) => request(`/api/spec-templates/${id}`, { method: "PATCH", body: b }),
+  deleteSpecField: (id) => request(`/api/spec-templates/${id}`, { method: "DELETE" }),
   // work orders (staff)
   workOrders: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
