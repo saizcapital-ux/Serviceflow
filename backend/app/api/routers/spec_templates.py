@@ -3,16 +3,20 @@ equipment type. Read by any staff; managed by owners/managers."""
 import csv
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_roles, require_staff
 from app.core.database import get_db
-from app.models import Equipment, EquipmentSpecField, EquipmentType, User, UserRole
+from app.models import Customer, Equipment, EquipmentSpecField, EquipmentType, User, UserRole
 from app.schemas import SpecFieldCreate, SpecFieldOut, SpecFieldUpdate
 from app.services import audit
+
+# Fixed (non-spec) columns in the import/template CSV.
+_BASE_COLUMNS = ["Customer", "Tag", "Manufacturer", "Model", "Serial"]
+MAX_IMPORT_ROWS = 2000
 
 router = APIRouter(prefix="/api/spec-templates", tags=["spec-templates"])
 
@@ -97,6 +101,89 @@ def spec_report_csv(
         iter([buf.getvalue()]), media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="specs-{equipment_type.value}.csv"'},
     )
+
+
+def _field_labels(db: Session, organization_id: int, equipment_type: EquipmentType) -> list[str]:
+    return [
+        f.label for f in db.scalars(
+            select(EquipmentSpecField).where(
+                EquipmentSpecField.organization_id == organization_id,
+                EquipmentSpecField.equipment_type == equipment_type.value,
+            ).order_by(EquipmentSpecField.position, EquipmentSpecField.id)
+        ).all()
+    ]
+
+
+@router.get("/import-template.csv")
+def import_template(equipment_type: EquipmentType, db: Session = Depends(get_db),
+                    user: User = Depends(require_staff)):
+    """Download a blank CSV to bulk-load assets of this type (header only)."""
+    labels = _field_labels(db, user.organization_id, equipment_type)
+    buf = io.StringIO()
+    csv.writer(buf).writerow(_BASE_COLUMNS + labels)
+    return StreamingResponse(
+        iter([buf.getvalue()]), media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="import-{equipment_type.value}.csv"'},
+    )
+
+
+@router.post("/import")
+async def import_equipment(
+    equipment_type: EquipmentType = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_staff),
+):
+    """Bulk-create assets of one type from a CSV. Each row needs a Customer name
+    that already exists; spec columns matching the type's template become
+    nameplate_data. Returns a per-row summary."""
+    raw = (await file.read()).decode("utf-8-sig", errors="replace")
+    reader = csv.DictReader(io.StringIO(raw))
+    if not reader.fieldnames or "Customer" not in reader.fieldnames:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "CSV must have a 'Customer' column header.")
+
+    labels = _field_labels(db, user.organization_id, equipment_type)
+    # Cache customers by lowercased name for this org.
+    customers = {
+        c.name.lower(): c.id
+        for c in db.scalars(select(Customer).where(Customer.organization_id == user.organization_id)).all()
+    }
+
+    created, errors = 0, []
+    to_add = []
+    for i, row in enumerate(reader, start=2):  # row 1 is the header
+        if i - 1 > MAX_IMPORT_ROWS:
+            errors.append({"row": i, "error": f"File exceeds {MAX_IMPORT_ROWS} rows; split it."})
+            break
+        if not any((v or "").strip() for v in row.values()):
+            continue  # skip blank lines
+        name = (row.get("Customer") or "").strip()
+        if not name:
+            errors.append({"row": i, "error": "Missing Customer."})
+            continue
+        cust_id = customers.get(name.lower())
+        if not cust_id:
+            errors.append({"row": i, "error": f"Customer '{name}' not found."})
+            continue
+        specs = {label: row[label].strip() for label in labels if (row.get(label) or "").strip()}
+        to_add.append(Equipment(
+            organization_id=user.organization_id, customer_id=cust_id,
+            equipment_type=equipment_type,
+            tag=(row.get("Tag") or "").strip() or None,
+            manufacturer=(row.get("Manufacturer") or "").strip() or None,
+            model=(row.get("Model") or "").strip() or None,
+            serial_number=(row.get("Serial") or "").strip() or None,
+            nameplate_data=specs,
+        ))
+        created += 1
+
+    if to_add:
+        db.add_all(to_add)
+        audit.record(db, organization_id=user.organization_id, actor=user, action="equipment.imported",
+                     summary=f"Imported {created} {equipment_type.value}(s) via CSV",
+                     entity_type="equipment", entity_id=None)
+        db.commit()
+    return {"created": created, "errors": errors}
 
 
 @router.post("", response_model=SpecFieldOut, status_code=status.HTTP_201_CREATED)

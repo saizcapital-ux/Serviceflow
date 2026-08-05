@@ -199,3 +199,18 @@ export async function uploadAttachment(woId, file, kind) {
   if (!res.ok) throw new Error(data?.detail || `Upload failed (${res.status})`);
   return data;
 }
+
+/** Bulk-import equipment of a type from a CSV file. Returns {created, errors}. */
+export async function importEquipment(equipmentType, file) {
+  const form = new FormData();
+  form.append("equipment_type", equipmentType);
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/api/spec-templates/import`, {
+    method: "POST",
+    headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    body: form,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.detail || `Import failed (${res.status})`);
+  return data;
+}

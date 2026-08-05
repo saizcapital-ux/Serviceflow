@@ -1,5 +1,5 @@
 /* Staff application — hash-routed SPA for service-center employees. */
-import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText, downloadAuthed, openAuthed } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment, uploadAttachment, importEquipment, fetchAuthedText, downloadAuthed, openAuthed } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge, slaBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal, initThemeToggle,
@@ -1733,6 +1733,20 @@ async function renderSpecTemplates() {
       </div></div>
 
     <div class="card" style="margin-top:18px"><div class="card-head">
+        <h3>Bulk import — ${TYPE_LABEL[specType]}</h3></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px">Load many ${TYPE_LABEL[specType].toLowerCase()} at once.
+          Download the template (columns match this type's spec fields), fill it in, and upload. The
+          <strong>Customer</strong> name in each row must already exist.</p>
+        <div class="row wrap" style="gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="specTemplate">⬇ Download template</button>
+          <input type="file" id="specFile" accept=".csv" style="font-size:.85rem" />
+          <button class="btn btn-primary btn-sm" id="specImport">Import CSV</button>
+        </div>
+        <div id="importResult" style="margin-top:12px"></div>
+      </div></div>
+
+    <div class="card" style="margin-top:18px"><div class="card-head">
         <h3>Spec report — ${TYPE_LABEL[specType]}</h3>
         <button class="btn btn-ghost btn-sm" id="specCsv" ${report.equipment.length ? "" : "disabled"}>⬇ Export CSV</button></div>
       <div class="table-wrap"><table class="data">
@@ -1748,6 +1762,26 @@ async function renderSpecTemplates() {
   el("#specTypeSel").addEventListener("change", (e) => { specType = e.target.value; renderSpecTemplates(); });
   el("#specCsv").addEventListener("click", () =>
     downloadAuthed(`/api/spec-templates/report.csv?equipment_type=${specType}`, `specs-${specType}.csv`).catch((e) => toast(e.message, "err")));
+  el("#specTemplate").addEventListener("click", () =>
+    downloadAuthed(`/api/spec-templates/import-template.csv?equipment_type=${specType}`, `import-${specType}.csv`).catch((e) => toast(e.message, "err")));
+  el("#specImport").addEventListener("click", async () => {
+    const f = el("#specFile").files[0];
+    if (!f) return toast("Choose a CSV file first", "err");
+    const btn = el("#specImport"); btn.disabled = true; btn.textContent = "Importing…";
+    try {
+      const res = await importEquipment(specType, f);
+      const errs = res.errors || [];
+      el("#importResult").innerHTML =
+        `<div class="badge status ready">Imported ${res.created}</div>` +
+        (errs.length ? ` <div class="badge status cancelled">${errs.length} skipped</div>
+          <ul class="muted" style="font-size:.82rem;margin-top:8px">${errs.slice(0, 20).map((e) => `<li>Row ${e.row}: ${esc(e.error)}</li>`).join("")}</ul>` : "");
+      toast(`Imported ${res.created}${errs.length ? `, ${errs.length} skipped` : ""}`, errs.length ? "" : "ok");
+      const fresh = await api.specReport(specType);  // refresh the report table below
+      report.equipment = fresh.equipment;
+      renderSpecTemplates();
+    } catch (e) { toast(e.message, "err"); }
+    btn.disabled = false; btn.textContent = "Import CSV";
+  });
   els("tr[data-eqid]").forEach((tr) => tr.addEventListener("click", (e) => {
     if (e.target.tagName === "A") return;
     location.hash = `#/equipment/${tr.dataset.eqid}`;
