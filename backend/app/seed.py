@@ -9,7 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.core.database import Base, SessionLocal, engine
-from app.core.security import hash_password
+from app.core.security import generate_token, hash_password, hash_token
 from app.models import (
     Attachment,
     AuditLog,
@@ -23,6 +23,7 @@ from app.models import (
     EventType,
     Finding,
     FindingSeverity,
+    Invitation,
     Invoice,
     InvoiceLine,
     InvoiceStatus,
@@ -84,7 +85,9 @@ def seed(reset_first: bool = True) -> None:
                       ("Frame", None), ("Enclosure", None), ("Insulation Class", None)],
             "valve": [("Size", "in"), ("Pressure Class", None), ("Body Material", None),
                       ("Actuator", None)],
+            "actuator": [("Torque", "ft-lb"), ("Valve Size", "in"), ("Pressure Class", None), ("Model", None)],
             "pump": [("Flow", "GPM"), ("Head", "ft"), ("Impeller Dia.", "in"), ("Seal Type", None)],
+            "blower": [("CFM", None), ("Pressure", "psi"), ("Drive", None)],
         }
         for _etype, _fields in _spec_defaults.items():
             for _pos, (_label, _unit) in enumerate(_fields):
@@ -127,25 +130,31 @@ def seed(reset_first: bool = True) -> None:
                     full_name="Sam Whitfield", role=UserRole.customer, customer_id=acme.id))
 
         # ---- Equipment ----
+        # Nameplate keys match the spec-template field labels below, so the spec
+        # report and equipment nameplates show captured data in the demo.
         motor = Equipment(organization_id=org.id, customer_id=acme.id, location_id=loc_main.id, tag="MTR-4471",
                           equipment_type=EquipmentType.motor, manufacturer="Siemens", model="1LE2",
                           serial_number="SN-MTR-88213",
-                          nameplate_data={"hp": 250, "rpm": 1785, "voltage": "460V", "frame": "449T"},
+                          nameplate_data={"Horsepower": "250", "RPM": "1785", "Voltage": "460",
+                                          "Frame": "449T", "Enclosure": "TEFC", "Insulation Class": "F"},
                           location="Cooling Tower Bay 2")
         limitorque = Equipment(organization_id=org.id, customer_id=acme.id, location_id=loc_main.id, tag="VLV-0092",
                                equipment_type=EquipmentType.actuator, manufacturer="Limitorque",
                                model="SMB-000", serial_number="SN-LMT-33019",
-                               nameplate_data={"torque_ft_lb": 500, "valve_size_in": 12, "class": "600#"},
+                               nameplate_data={"Torque": "500", "Valve Size": "12", "Pressure Class": "600#",
+                                               "Model": "SMB-000"},
                                location="Feedwater Header")
         pump = Equipment(organization_id=org.id, customer_id=gulf.id, location_id=loc_field.id, tag="PMP-1180",
                          equipment_type=EquipmentType.pump, manufacturer="Goulds", model="3196",
                          serial_number="SN-PMP-55127",
-                         nameplate_data={"flow_gpm": 800, "head_ft": 220, "seal": "double mechanical"},
+                         nameplate_data={"Flow": "800", "Head": "220", "Impeller Dia.": "13",
+                                         "Seal Type": "double mechanical"},
                          location="Unit 5 Transfer")
         blower = Equipment(organization_id=org.id, customer_id=gulf.id, location_id=loc_field.id, tag="BLW-2030",
                            equipment_type=EquipmentType.blower, manufacturer="Gardner Denver",
                            model="RBDH", serial_number="SN-BLW-77410",
-                           nameplate_data={"cfm": 1200, "psi": 12}, location="Wastewater Aeration")
+                           nameplate_data={"CFM": "1200", "Pressure": "12", "Drive": "belt"},
+                           location="Wastewater Aeration")
         db.add_all([motor, limitorque, pump, blower])
         db.flush()
 
@@ -357,6 +366,29 @@ def seed(reset_first: bool = True) -> None:
             AuditLog(organization_id=org.id, actor_user_id=tech.id, actor_label="Priya Nair",
                      action="part.adjusted", summary="Adjusted BRG-6314N by -2 → 6 on hand",
                      entity_type="part", entity_id=None, created_at=now - timedelta(hours=8)),
+        ])
+
+        # ---- Demo: a pending team invitation (shows on the Team page) ----
+        db.add(Invitation(
+            organization_id=org.id, email="newhire@apexrepair.com", role=UserRole.technician,
+            token_hash=hash_token(generate_token()), invited_by=admin.id,
+            expires_at=now + timedelta(days=7),
+        ))
+
+        # ---- Demo: timeline notes + a customer portal message on WO-2026-0001 ----
+        db.add_all([
+            WorkOrderEvent(work_order_id=wo1.id, event_type=EventType.note, created_by=tech.id,
+                           visible_to_customer=False,
+                           message="Ordered replacement bearings (BRG-6314N); ETA 2 days. Rewind in progress.",
+                           created_at=now - timedelta(days=1, hours=4)),
+            WorkOrderEvent(work_order_id=wo1.id, event_type=EventType.note, created_by=None,
+                           visible_to_customer=True,
+                           message="Sam Whitfield: Any chance this is ready before Friday's outage?",
+                           created_at=now - timedelta(hours=20)),
+            WorkOrderEvent(work_order_id=wo1.id, event_type=EventType.note, created_by=writer.id,
+                           visible_to_customer=True,
+                           message="We're targeting Thursday for testing — will confirm once the bearings arrive.",
+                           created_at=now - timedelta(hours=18)),
         ])
 
         db.commit()

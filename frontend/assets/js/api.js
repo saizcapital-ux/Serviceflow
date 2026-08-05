@@ -74,6 +74,7 @@ export const api = {
   },
   equipmentOne: (id) => request(`/api/equipment/${id}`),
   createEquipment: (b) => request("/api/equipment", { method: "POST", body: b }),
+  updateEquipment: (id, b) => request(`/api/equipment/${id}`, { method: "PATCH", body: b }),
   // equipment spec templates
   specTemplates: (equipmentType) => request(`/api/spec-templates${equipmentType ? `?equipment_type=${equipmentType}` : ""}`),
   specReport: (equipmentType) => request(`/api/spec-templates/report?equipment_type=${equipmentType}`),
@@ -197,5 +198,20 @@ export async function uploadAttachment(woId, file, kind) {
   });
   const data = await res.json().catch(() => null);
   if (!res.ok) throw new Error(data?.detail || `Upload failed (${res.status})`);
+  return data;
+}
+
+/** Bulk-import equipment of a type from a CSV file. Returns {created, errors}. */
+export async function importEquipment(equipmentType, file) {
+  const form = new FormData();
+  form.append("equipment_type", equipmentType);
+  form.append("file", file);
+  const res = await fetch(`${API_BASE}/api/spec-templates/import`, {
+    method: "POST",
+    headers: auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    body: form,
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.detail || `Import failed (${res.status})`);
   return data;
 }

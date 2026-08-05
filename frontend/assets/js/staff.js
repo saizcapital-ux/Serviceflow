@@ -1,5 +1,5 @@
 /* Staff application — hash-routed SPA for service-center employees. */
-import { api, auth, openPdf, openAttachment, uploadAttachment, fetchAuthedText, downloadAuthed, openAuthed } from "/assets/js/api.js";
+import { api, auth, openPdf, openAttachment, uploadAttachment, importEquipment, fetchAuthedText, downloadAuthed, openAuthed } from "/assets/js/api.js";
 import {
   el, els, esc, money, fmtDate, fmtDateTime, statusBadge, prioBadge, slaBadge,
   STATUS_LABEL, TYPE_LABEL, TYPE_ICON, toast, modal, initThemeToggle,
@@ -1086,11 +1086,12 @@ async function renderEquipmentDetail(id) {
     </div>
     <div class="grid" style="grid-template-columns:1.6fr 1fr;align-items:start">
       <div class="stack">
-        <div class="card"><div class="card-head"><h3>Nameplate</h3></div>
+        <div class="card"><div class="card-head"><h3>Nameplate</h3>
+          <button class="btn btn-ghost btn-sm" id="editEq">✎ Edit</button></div>
           <div class="card-body">
             <dl class="kv"><dt>Serial</dt><dd class="mono">${esc(eq.serial_number || "—")}</dd>
               <dt>Location</dt><dd>${esc(eq.location || "—")}</dd></dl>
-            <div class="row wrap" style="margin-top:10px">${nameplate}</div></div></div>
+            <div class="row wrap" style="margin-top:10px">${nameplate || '<span class="muted">No specs captured yet.</span>'}</div></div></div>
         <div class="card"><div class="card-head"><h3>Repair history <span class="badge">${history.length}</span></h3></div>
           <div class="table-wrap"><table class="data">
             <thead><tr><th>WO #</th><th>Title</th><th>Status</th><th>Opened</th></tr></thead>
@@ -1110,6 +1111,50 @@ async function renderEquipmentDetail(id) {
   try { svg = await fetchAuthedText(`/api/equipment/${id}/qr.svg`); el("#qrBox").innerHTML = svg; }
   catch { el("#qrBox").innerHTML = '<span class="muted">QR unavailable</span>'; }
   el("#printLabel").addEventListener("click", () => printLabel(eq, owner, svg));
+  el("#editEq").addEventListener("click", () => openEditEquipment(eq));
+}
+
+async function openEditEquipment(eq) {
+  let fields = [];
+  try { fields = await api.specTemplates(eq.equipment_type); } catch { /* ignore */ }
+  const np = eq.nameplate_data || {};
+  const specInputs = fields.length ? `<div class="muted" style="font-size:.8rem;margin-top:4px">Specs — ${TYPE_LABEL[eq.equipment_type]}</div>
+    <div class="row wrap">${fields.map((f) => `<label class="field grow" style="min-width:140px">
+      <span>${esc(f.label)}${f.unit ? ` (${esc(f.unit)})` : ""}</span>
+      <input data-spec="${esc(f.label)}" value="${esc(np[f.label] || "")}" /></label>`).join("")}</div>` : "";
+  const m = modal(`<div class="card-head"><h3>Edit equipment</h3></div>
+    <div class="card-body stack">
+      <label class="field"><span>Asset tag</span><input id="eeTag" value="${esc(eq.tag || "")}" /></label>
+      <div class="row">
+        <label class="field grow"><span>Manufacturer</span><input id="eeMfr" value="${esc(eq.manufacturer || "")}" /></label>
+        <label class="field grow"><span>Model</span><input id="eeMod" value="${esc(eq.model || "")}" /></label>
+      </div>
+      <div class="row">
+        <label class="field grow"><span>Serial #</span><input id="eeSer" value="${esc(eq.serial_number || "")}" /></label>
+        <label class="field grow"><span>Location on site</span><input id="eeLoc" value="${esc(eq.location || "")}" /></label>
+      </div>
+      ${specInputs}
+      <div class="row" style="justify-content:flex-end"><button class="btn btn-ghost" id="eeCx">Cancel</button>
+        <button class="btn btn-primary" id="eeOk">Save changes</button></div></div>`);
+  el("#eeCx", m.root).onclick = m.close;
+  el("#eeOk", m.root).onclick = async () => {
+    const nameplate_data = { ...np };  // preserve any keys not in the template
+    els("[data-spec]", m.root).forEach((inp) => {
+      const v = inp.value.trim();
+      if (v) nameplate_data[inp.dataset.spec] = v; else delete nameplate_data[inp.dataset.spec];
+    });
+    try {
+      await api.updateEquipment(eq.id, {
+        tag: el("#eeTag", m.root).value.trim() || null,
+        manufacturer: el("#eeMfr", m.root).value.trim() || null,
+        model: el("#eeMod", m.root).value.trim() || null,
+        serial_number: el("#eeSer", m.root).value.trim() || null,
+        location: el("#eeLoc", m.root).value.trim() || null,
+        nameplate_data,
+      });
+      m.close(); toast("Equipment updated", "ok"); renderEquipmentDetail(eq.id);
+    } catch (ex) { toast(ex.message, "err"); }
+  };
 }
 
 function reliabilityCard(history) {
@@ -1733,6 +1778,20 @@ async function renderSpecTemplates() {
       </div></div>
 
     <div class="card" style="margin-top:18px"><div class="card-head">
+        <h3>Bulk import — ${TYPE_LABEL[specType]}</h3></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px">Load many ${TYPE_LABEL[specType].toLowerCase()} at once.
+          Download the template (columns match this type's spec fields), fill it in, and upload. The
+          <strong>Customer</strong> name in each row must already exist.</p>
+        <div class="row wrap" style="gap:8px;align-items:center">
+          <button class="btn btn-ghost btn-sm" id="specTemplate">⬇ Download template</button>
+          <input type="file" id="specFile" accept=".csv" style="font-size:.85rem" />
+          <button class="btn btn-primary btn-sm" id="specImport">Import CSV</button>
+        </div>
+        <div id="importResult" style="margin-top:12px"></div>
+      </div></div>
+
+    <div class="card" style="margin-top:18px"><div class="card-head">
         <h3>Spec report — ${TYPE_LABEL[specType]}</h3>
         <button class="btn btn-ghost btn-sm" id="specCsv" ${report.equipment.length ? "" : "disabled"}>⬇ Export CSV</button></div>
       <div class="table-wrap"><table class="data">
@@ -1748,6 +1807,26 @@ async function renderSpecTemplates() {
   el("#specTypeSel").addEventListener("change", (e) => { specType = e.target.value; renderSpecTemplates(); });
   el("#specCsv").addEventListener("click", () =>
     downloadAuthed(`/api/spec-templates/report.csv?equipment_type=${specType}`, `specs-${specType}.csv`).catch((e) => toast(e.message, "err")));
+  el("#specTemplate").addEventListener("click", () =>
+    downloadAuthed(`/api/spec-templates/import-template.csv?equipment_type=${specType}`, `import-${specType}.csv`).catch((e) => toast(e.message, "err")));
+  el("#specImport").addEventListener("click", async () => {
+    const f = el("#specFile").files[0];
+    if (!f) return toast("Choose a CSV file first", "err");
+    const btn = el("#specImport"); btn.disabled = true; btn.textContent = "Importing…";
+    try {
+      const res = await importEquipment(specType, f);
+      const errs = res.errors || [];
+      el("#importResult").innerHTML =
+        `<div class="badge status ready">Imported ${res.created}</div>` +
+        (errs.length ? ` <div class="badge status cancelled">${errs.length} skipped</div>
+          <ul class="muted" style="font-size:.82rem;margin-top:8px">${errs.slice(0, 20).map((e) => `<li>Row ${e.row}: ${esc(e.error)}</li>`).join("")}</ul>` : "");
+      toast(`Imported ${res.created}${errs.length ? `, ${errs.length} skipped` : ""}`, errs.length ? "" : "ok");
+      const fresh = await api.specReport(specType);  // refresh the report table below
+      report.equipment = fresh.equipment;
+      renderSpecTemplates();
+    } catch (e) { toast(e.message, "err"); }
+    btn.disabled = false; btn.textContent = "Import CSV";
+  });
   els("tr[data-eqid]").forEach((tr) => tr.addEventListener("click", (e) => {
     if (e.target.tagName === "A") return;
     location.hash = `#/equipment/${tr.dataset.eqid}`;
