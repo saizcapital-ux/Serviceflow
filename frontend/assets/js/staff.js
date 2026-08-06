@@ -1087,7 +1087,8 @@ async function renderEquipmentDetail(id) {
     <div class="grid" style="grid-template-columns:1.6fr 1fr;align-items:start">
       <div class="stack">
         <div class="card"><div class="card-head"><h3>Nameplate</h3>
-          <button class="btn btn-ghost btn-sm" id="editEq">✎ Edit</button></div>
+          <div class="row"><button class="btn btn-ghost btn-sm" id="specSheet">🖨 Spec sheet</button>
+            <button class="btn btn-ghost btn-sm" id="editEq">✎ Edit</button></div></div>
           <div class="card-body">
             <dl class="kv"><dt>Serial</dt><dd class="mono">${esc(eq.serial_number || "—")}</dd>
               <dt>Location</dt><dd>${esc(eq.location || "—")}</dd></dl>
@@ -1112,6 +1113,8 @@ async function renderEquipmentDetail(id) {
   catch { el("#qrBox").innerHTML = '<span class="muted">QR unavailable</span>'; }
   el("#printLabel").addEventListener("click", () => printLabel(eq, owner, svg));
   el("#editEq").addEventListener("click", () => openEditEquipment(eq));
+  el("#specSheet").addEventListener("click", () =>
+    openAuthed(`/api/equipment/${eq.id}/spec-sheet.pdf`).catch((e) => toast(e.message, "err")));
 }
 
 async function openEditEquipment(eq) {
