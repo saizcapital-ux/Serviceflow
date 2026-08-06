@@ -1,19 +1,23 @@
 """Test / inspection reports: per-equipment-type test templates, and the
 pass/fail results captured on a work order (e.g. a motor's megger test)."""
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_roles, require_staff
 from app.core.database import get_db
 from app.models import (
+    Customer,
     Equipment,
+    Organization,
     TestResult,
     TestTemplateItem,
     User,
     UserRole,
     WorkOrder,
 )
+from app.services.pdf import render_test_report_pdf
 from app.schemas import (
     TestReportOut,
     TestResultOut,
@@ -117,6 +121,22 @@ def _report(db: Session, wo_id: int) -> TestReportOut:
 def get_tests(wo_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
     _wo(db, wo_id, user)
     return _report(db, wo_id)
+
+
+@router.get("/work-orders/{wo_id}/test-report.pdf")
+def test_report_pdf(wo_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Printable test/inspection report for a work order."""
+    wo = _wo(db, wo_id, user)
+    results = _results(db, wo_id)
+    org = db.get(Organization, user.organization_id)
+    customer = db.get(Customer, wo.customer_id)
+    equipment = db.get(Equipment, wo.equipment_id) if wo.equipment_id else None
+    pdf = render_test_report_pdf(
+        org=org, work_order=wo, customer=customer, equipment=equipment,
+        results=results, overall=compute_overall(results),
+    )
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{wo.number}-test-report.pdf"'})
 
 
 @router.post("/work-orders/{wo_id}/tests/apply", response_model=TestReportOut, status_code=status.HTTP_201_CREATED)

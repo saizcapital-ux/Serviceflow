@@ -535,7 +535,11 @@ async function renderTestReport(w) {
       <td><select data-test-res="${i.id}" style="padding:.25rem .4rem">
         ${RESULT_OPTS.map((r) => `<option value="${r}" ${r === i.result ? "selected" : ""}>${RESULT_LABEL[r]}</option>`).join("")}</select></td>
       <td><input data-test-note="${i.id}" value="${esc(i.notes || "")}" placeholder="—" style="width:100%;padding:.25rem .4rem" /></td>
-    </tr>`).join("")}</tbody></table></div>`;
+    </tr>`).join("")}</tbody></table></div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-ghost btn-sm" id="printTestReport">🖨 Print report</button></div>`;
+  el("#printTestReport")?.addEventListener("click", () =>
+    openAuthed(`/api/work-orders/${w.id}/test-report.pdf`).catch((e) => toast(e.message, "err")));
 
   const save = async (id, body, rerender) => {
     try { await api.updateTestResult(id, body); if (rerender) renderTestReport(w); }

@@ -64,3 +64,36 @@ def test_invalid_result_rejected(client, staff_headers):
 
 def test_tests_require_staff(client, portal_headers):
     assert client.get("/api/work-orders/1/tests", headers=portal_headers).status_code == 403
+
+
+def test_test_report_pdf(client, staff_headers):
+    wo_id = _motor_wo(client, staff_headers)
+    client.post(f"/api/work-orders/{wo_id}/tests/apply", headers=staff_headers)
+    r = client.get(f"/api/work-orders/{wo_id}/test-report.pdf", headers=staff_headers)
+    assert r.status_code == 200
+    assert r.headers["content-type"] == "application/pdf"
+    assert r.content[:5] == b"%PDF-"
+
+
+def test_portal_sees_test_report_readonly(client, staff_headers, portal_headers):
+    # Find a work order the portal customer owns and apply + fail a test.
+    number = client.get("/api/portal/work-orders", headers=portal_headers).json()[0]["number"]
+    staff_wo = next(w for w in client.get("/api/work-orders", headers=staff_headers).json()
+                    if w["number"] == number)
+    report = client.post(f"/api/work-orders/{staff_wo['id']}/tests/apply", headers=staff_headers)
+    if report.status_code != 201:
+        return  # that WO's equipment type has no test template; skip
+    item = report.json()["items"][0]
+    client.patch(f"/api/test-results/{item['id']}", json={"value": "0.2", "result": "fail"}, headers=staff_headers)
+
+    portal_wo_id = client.get("/api/portal/work-orders", headers=portal_headers).json()[0]["id"]
+    pr = client.get(f"/api/portal/work-orders/{portal_wo_id}/tests", headers=portal_headers)
+    assert pr.status_code == 200
+    assert pr.json()["overall"] == "failed"
+
+
+def test_portal_cannot_see_foreign_test_report(client, staff_headers, portal_headers):
+    owned = {w["id"] for w in client.get("/api/portal/work-orders", headers=portal_headers).json()}
+    foreign = next(w for w in client.get("/api/work-orders", headers=staff_headers).json()
+                   if w["id"] not in owned)
+    assert client.get(f"/api/portal/work-orders/{foreign['id']}/tests", headers=portal_headers).status_code == 404

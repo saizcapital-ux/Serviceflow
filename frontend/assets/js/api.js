@@ -88,6 +88,7 @@ export const api = {
   woTests: (woId) => request(`/api/work-orders/${woId}/tests`),
   applyTests: (woId) => request(`/api/work-orders/${woId}/tests/apply`, { method: "POST" }),
   updateTestResult: (id, b) => request(`/api/test-results/${id}`, { method: "PATCH", body: b }),
+  portalTests: (woId) => request(`/api/portal/work-orders/${woId}/tests`),
   // work orders (staff)
   workOrders: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

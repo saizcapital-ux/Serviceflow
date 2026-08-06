@@ -12,6 +12,7 @@ from app.models import (
     Invoice,
     Quote,
     ServiceType,
+    TestResult,
     User,
     UserRole,
     WorkOrder,
@@ -26,6 +27,8 @@ from app.schemas import (
     QuoteDecision,
     QuoteOut,
     ServiceRequestCreate,
+    TestReportOut,
+    TestResultOut,
     WorkOrderDetail,
     WorkOrderSummary,
 )
@@ -109,6 +112,23 @@ def post_message(
                  summary=f"Customer message on {wo.number}", entity_type="work_order", entity_id=wo.id)
     db.commit()
     return my_work_order_detail(wo.id, db, user)
+
+
+@router.get("/work-orders/{wo_id}/tests", response_model=TestReportOut)
+def my_work_order_tests(wo_id: int, db: Session = Depends(get_db), user: User = Depends(require_portal)):
+    """Read-only test/inspection report for the customer's own work order."""
+    from app.api.routers.tests import compute_overall  # local import avoids a cycle at load time
+    wo = db.scalar(select(WorkOrder).where(
+        WorkOrder.id == wo_id, WorkOrder.organization_id == user.organization_id,
+        WorkOrder.customer_id == user.customer_id))
+    if not wo:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Work order not found.")
+    results = db.scalars(
+        select(TestResult).where(TestResult.work_order_id == wo_id)
+        .order_by(TestResult.position, TestResult.id)
+    ).all()
+    return TestReportOut(overall=compute_overall(results),
+                         items=[TestResultOut.model_validate(r) for r in results])
 
 
 @router.get("/invoices", response_model=list[InvoiceOut])
