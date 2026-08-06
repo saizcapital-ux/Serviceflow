@@ -81,6 +81,13 @@ export const api = {
   createSpecField: (b) => request("/api/spec-templates", { method: "POST", body: b }),
   updateSpecField: (id, b) => request(`/api/spec-templates/${id}`, { method: "PATCH", body: b }),
   deleteSpecField: (id) => request(`/api/spec-templates/${id}`, { method: "DELETE" }),
+  // test/inspection reports
+  testTemplates: (equipmentType) => request(`/api/test-templates${equipmentType ? `?equipment_type=${equipmentType}` : ""}`),
+  createTestItem: (b) => request("/api/test-templates", { method: "POST", body: b }),
+  deleteTestItem: (id) => request(`/api/test-templates/${id}`, { method: "DELETE" }),
+  woTests: (woId) => request(`/api/work-orders/${woId}/tests`),
+  applyTests: (woId) => request(`/api/work-orders/${woId}/tests/apply`, { method: "POST" }),
+  updateTestResult: (id, b) => request(`/api/test-results/${id}`, { method: "PATCH", body: b }),
   // work orders (staff)
   workOrders: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

@@ -364,6 +364,9 @@ async function renderWorkOrder(id) {
           <div class="card-body" id="checklist"><p class="muted">Loading…</p></div></div>
         <div class="card"><div class="card-head"><h3>Inspection findings</h3></div>
           <div class="card-body">${findings}</div></div>
+        <div class="card"><div class="card-head"><h3>Test report</h3>
+          <span id="testOverall" class="badge"></span></div>
+          <div class="card-body" id="testReport"><p class="muted">Loading…</p></div></div>
         <div class="card"><div class="card-head"><h3>Attachments &amp; photos</h3>
           <button class="btn btn-ghost btn-sm" id="uploadBtn">+ Upload</button></div>
           <div class="card-body">${attachments}</div></div>
@@ -434,6 +437,7 @@ async function renderWorkOrder(id) {
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
   el("#usePart").addEventListener("click", () => openUsePart(w.id));
   renderChecklist(w);
+  renderTestReport(w);
   el("#editPo").addEventListener("click", async () => {
     const po = prompt("Customer PO number for this job:", w.po_number || "");
     if (po === null) return;
@@ -491,6 +495,57 @@ function openUpload(woId) {
       m.close(); toast("Uploaded", "ok"); renderWorkOrder(woId);
     } catch (ex) { toast(ex.message, "err"); }
   };
+}
+
+const TEST_OVERALL = {
+  passed: { cls: "ready", label: "✓ PASSED" },
+  failed: { cls: "cancelled", label: "✗ FAILED" },
+  in_progress: { cls: "quote_pending", label: "In progress" },
+};
+const RESULT_OPTS = ["pending", "pass", "fail", "na"];
+const RESULT_LABEL = { pending: "—", pass: "Pass", fail: "Fail", na: "N/A" };
+
+async function renderTestReport(w) {
+  const box = el("#testReport");
+  if (!box) return;
+  let rep;
+  try { rep = await api.woTests(w.id); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+
+  const badge = el("#testOverall");
+  const ov = TEST_OVERALL[rep.overall];
+  if (badge) { badge.className = "badge" + (ov ? ` status ${ov.cls}` : " hide"); badge.textContent = ov ? ov.label : ""; }
+
+  if (!rep.items.length) {
+    box.innerHTML = w.equipment_id
+      ? `<p class="muted" style="font-size:.85rem;margin-bottom:10px">Run the standard tests for this ${TYPE_LABEL[w.equipment?.equipment_type] || "unit"}.</p>
+         <button class="btn btn-primary btn-sm" id="applyTests">Apply test template</button>`
+      : '<p class="muted">Attach equipment to this work order to run tests.</p>';
+    el("#applyTests")?.addEventListener("click", async () => {
+      try { await api.applyTests(w.id); toast("Test template applied", "ok"); renderTestReport(w); }
+      catch (e) { toast(e.message, "err"); }
+    });
+    return;
+  }
+
+  box.innerHTML = `<div class="table-wrap"><table class="data">
+    <thead><tr><th>Test</th><th>Value</th><th>Result</th><th>Notes</th></tr></thead>
+    <tbody>${rep.items.map((i) => `<tr data-nostyle class="test-row ${i.result}">
+      <td><strong>${esc(i.label)}</strong>${i.unit ? ` <span class="muted">(${esc(i.unit)})</span>` : ""}</td>
+      <td><input data-test-val="${i.id}" value="${esc(i.value || "")}" style="width:90px;padding:.25rem .4rem" /></td>
+      <td><select data-test-res="${i.id}" style="padding:.25rem .4rem">
+        ${RESULT_OPTS.map((r) => `<option value="${r}" ${r === i.result ? "selected" : ""}>${RESULT_LABEL[r]}</option>`).join("")}</select></td>
+      <td><input data-test-note="${i.id}" value="${esc(i.notes || "")}" placeholder="—" style="width:100%;padding:.25rem .4rem" /></td>
+    </tr>`).join("")}</tbody></table></div>`;
+
+  const save = async (id, body, rerender) => {
+    try { await api.updateTestResult(id, body); if (rerender) renderTestReport(w); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  // Result change re-renders (updates overall + row color).
+  els("[data-test-res]", box).forEach((s) => s.addEventListener("change", () => save(s.dataset.testRes, { result: s.value }, true)));
+  // Value/notes save on blur without a full re-render.
+  els("[data-test-val]", box).forEach((i) => i.addEventListener("change", () => save(i.dataset.testVal, { value: i.value.trim() }, false)));
+  els("[data-test-note]", box).forEach((i) => i.addEventListener("change", () => save(i.dataset.testNote, { notes: i.value.trim() }, false)));
 }
 
 function renderChecklist(w) {
@@ -1753,16 +1808,23 @@ async function renderSpecTemplates() {
   loading();
   const types = Object.keys(TYPE_LABEL);
   if (!types.includes(specType)) specType = types[0];
-  const [fields, report] = await Promise.all([api.specTemplates(specType), api.specReport(specType)]);
+  const [fields, report, testItems] = await Promise.all([
+    api.specTemplates(specType), api.specReport(specType), api.testTemplates(specType)]);
   const rows = fields.map((f) => `<tr data-nostyle>
     <td><strong>${esc(f.label)}</strong></td>
     <td class="muted">${esc(f.unit || "—")}</td>
     <td class="text-right"><button class="btn btn-danger btn-sm" data-del-spec="${f.id}">Remove</button></td></tr>`).join("") ||
     '<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">No spec fields for this type yet.</td></tr>';
 
+  const testRows = testItems.map((t) => `<tr data-nostyle>
+    <td><strong>${esc(t.label)}</strong></td>
+    <td class="muted">${esc(t.unit || "—")}</td>
+    <td class="text-right"><button class="btn btn-danger btn-sm" data-del-test="${t.id}">Remove</button></td></tr>`).join("") ||
+    '<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">No test items for this type yet.</td></tr>';
+
   view.innerHTML = `
-    <div class="page-title"><h1>Spec Templates</h1>
-      <span class="muted">Define the specs captured for each equipment type</span></div>
+    <div class="page-title"><h1>Templates</h1>
+      <span class="muted">Specs to capture and tests to run for each equipment type</span></div>
     <div class="card"><div class="card-head">
         <label class="field" style="margin:0"><span class="muted" style="font-size:.78rem">Equipment type</span>
           <select id="specTypeSel">${types.map((t) => `<option value="${t}" ${t === specType ? "selected" : ""}>${TYPE_LABEL[t]}</option>`).join("")}</select></label>
@@ -1778,6 +1840,20 @@ async function renderSpecTemplates() {
         <div class="table-wrap"><table class="data">
           <thead><tr><th>Field</th><th>Unit</th><th></th></tr></thead>
           <tbody>${rows}</tbody></table></div>
+      </div></div>
+
+    <div class="card" style="margin-top:18px"><div class="card-head"><h3>Test items — ${TYPE_LABEL[specType]}</h3></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px">Pass/fail tests technicians run on each
+          ${TYPE_LABEL[specType].toLowerCase()} (e.g. a motor's megger test). They appear as the Test report on the work order.</p>
+        <div class="row" style="align-items:flex-end;gap:8px;margin-bottom:14px">
+          <label class="field grow" style="max-width:300px"><span>New test</span><input id="testLabel" placeholder="e.g. Insulation Resistance (Megger)" /></label>
+          <label class="field" style="max-width:120px"><span>Unit (optional)</span><input id="testUnit" placeholder="MΩ" /></label>
+          <button class="btn btn-primary" id="testAdd">Add test</button>
+        </div>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Test</th><th>Unit</th><th></th></tr></thead>
+          <tbody>${testRows}</tbody></table></div>
       </div></div>
 
     <div class="card" style="margin-top:18px"><div class="card-head">
@@ -1846,6 +1922,19 @@ async function renderSpecTemplates() {
   els("[data-del-spec]").forEach((b) => b.addEventListener("click", async () => {
     if (!confirm("Remove this spec field? Existing equipment data is not deleted.")) return;
     try { await api.deleteSpecField(b.dataset.delSpec); toast("Field removed", ""); renderSpecTemplates(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
+  el("#testAdd").addEventListener("click", async () => {
+    const label = el("#testLabel").value.trim();
+    if (!label) return toast("Enter a test name", "err");
+    try {
+      await api.createTestItem({ equipment_type: specType, label, unit: el("#testUnit").value.trim() || null, position: testItems.length });
+      toast("Test added", "ok"); renderSpecTemplates();
+    } catch (e) { toast(e.message, "err"); }
+  });
+  els("[data-del-test]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Remove this test item? Results already recorded on jobs are not deleted.")) return;
+    try { await api.deleteTestItem(b.dataset.delTest); toast("Test removed", ""); renderSpecTemplates(); }
     catch (e) { toast(e.message, "err"); }
   }));
 }
