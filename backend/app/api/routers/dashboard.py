@@ -7,8 +7,18 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_staff
 from app.core.database import get_db
-from app.models import Priority, ServiceType, User, WorkOrder, WorkOrderStatus
-from app.schemas import DashboardStats, StatusCount, WorkOrderSummary
+from app.models import (
+    Customer,
+    Equipment,
+    EquipmentSpecField,
+    Priority,
+    ServiceType,
+    TestTemplateItem,
+    User,
+    WorkOrder,
+    WorkOrderStatus,
+)
+from app.schemas import DashboardStats, SetupProgress, StatusCount, WorkOrderSummary
 from app.services import sla, workflow
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -36,6 +46,25 @@ def dashboard(location_id: int | None = None, db: Session = Depends(get_db), use
         .limit(8)
     ).all()
 
+    # Onboarding progress is org-wide (not location-scoped): does this org exist yet?
+    def org_exists(model) -> bool:
+        return bool(
+            db.scalar(select(func.count()).select_from(model).where(model.organization_id == org))
+        )
+
+    staff_count = db.scalar(
+        select(func.count()).select_from(User).where(
+            User.organization_id == org, User.customer_id.is_(None), User.is_active.is_(True)
+        )
+    ) or 0
+    setup = SetupProgress(
+        has_customer=org_exists(Customer),
+        has_equipment=org_exists(Equipment),
+        has_work_order=org_exists(WorkOrder),
+        has_team=staff_count > 1,
+        has_template=org_exists(TestTemplateItem) or org_exists(EquipmentSpecField),
+    )
+
     today = date.today()
     open_states = WorkOrder.status.in_(sla.OPEN_STATES)
     return DashboardStats(
@@ -56,4 +85,5 @@ def dashboard(location_id: int | None = None, db: Session = Depends(get_db), use
         ),
         by_status=[StatusCount(status=s, count=c) for s, c in by_status_rows],
         recent=[WorkOrderSummary.model_validate(w) for w in recent],
+        setup=setup,
     )

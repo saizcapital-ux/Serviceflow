@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field, field_validator
 
 from app.models.enums import (
     EquipmentType,
@@ -691,6 +691,33 @@ class StatusCount(BaseModel):
     count: int
 
 
+class SetupProgress(BaseModel):
+    """First-run onboarding milestones, computed org-wide (not location-scoped)."""
+
+    has_customer: bool
+    has_equipment: bool
+    has_work_order: bool
+    has_team: bool
+    has_template: bool
+
+    @computed_field
+    @property
+    def done(self) -> int:
+        return sum(
+            [self.has_customer, self.has_equipment, self.has_work_order, self.has_team, self.has_template]
+        )
+
+    @computed_field
+    @property
+    def total(self) -> int:
+        return 5
+
+    @computed_field
+    @property
+    def complete(self) -> bool:
+        return self.done == self.total
+
+
 class DashboardStats(BaseModel):
     open_work_orders: int
     rush_jobs: int
@@ -701,6 +728,7 @@ class DashboardStats(BaseModel):
     due_soon_open: int
     by_status: list[StatusCount]
     recent: list[WorkOrderSummary]
+    setup: SetupProgress
 
 
 TokenResponse.model_rebuild()

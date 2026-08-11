@@ -178,31 +178,7 @@ async function renderDashboard() {
     .map((s) => `<div class="spread" style="padding:6px 0">${statusBadge(s.status)}
       <strong>${s.count}</strong></div>`).join("");
 
-  // First-run onboarding for a brand-new shop with no jobs yet.
-  const isNewShop = d.recent.length === 0 && d.open_work_orders === 0
-    && d.awaiting_approval === 0 && d.ready_to_ship === 0;
-  const canInvite = ["owner", "manager"].includes((auth.user || {}).role);
-  const firstName = ((auth.user || {}).full_name || "").split(" ")[0];
-  const onboarding = isNewShop ? `
-    <div class="card" style="margin-bottom:22px;border-color:var(--brand-400)">
-      <div class="card-body">
-        <h2 style="margin-bottom:4px">👋 Welcome to Serviceflow${firstName ? ", " + esc(firstName) : ""}!</h2>
-        <p class="muted" style="margin-bottom:16px">Your shop is ready. Three steps to get rolling:</p>
-        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
-          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
-            <div style="font-size:1.6rem">🏢</div><strong>1. Add a customer</strong>
-            <p class="muted" style="font-size:.85rem">Create the customer whose equipment you service.</p>
-            <a class="btn btn-ghost btn-sm" href="#/customers" style="align-self:flex-start">Add customer →</a></div></div>
-          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
-            <div style="font-size:1.6rem">🔧</div><strong>2. Create a work order</strong>
-            <p class="muted" style="font-size:.85rem">Track a repair from intake to ship &amp; invoice.</p>
-            <button class="btn btn-primary btn-sm" id="obNewWo" style="align-self:flex-start">New work order →</button></div></div>
-          ${canInvite ? `<div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
-            <div style="font-size:1.6rem">👥</div><strong>3. Invite your team</strong>
-            <p class="muted" style="font-size:.85rem">Bring in service writers and technicians.</p>
-            <a class="btn btn-ghost btn-sm" href="#/team" style="align-self:flex-start">Invite teammate →</a></div></div>` : ""}
-        </div>
-      </div></div>` : "";
+  const onboarding = setupChecklist(d.setup);
 
   view.innerHTML = `
     <div class="page-title"><h1>Dashboard</h1>
@@ -231,8 +207,86 @@ async function renderDashboard() {
       </div>
     </div>`;
   el("#obNewWo")?.addEventListener("click", openNewWorkOrder);
+  el("#obDismiss")?.addEventListener("click", () => {
+    localStorage.setItem("sf_setup_dismissed", "1");
+    el("#setupChecklist")?.remove();
+  });
   wireWoRows();
   hydrateEquipment();
+}
+
+// First-run setup checklist. Renders until every milestone is met, then shows a
+// one-time "all set" state the user can dismiss; stays hidden once dismissed.
+function setupChecklist(setup) {
+  if (!setup) return "";
+  const dismissed = localStorage.getItem("sf_setup_dismissed") === "1";
+  // Once complete and acknowledged, never show again.
+  if (setup.complete && dismissed) return "";
+
+  const canInvite = ["owner", "manager"].includes((auth.user || {}).role);
+  const firstName = ((auth.user || {}).full_name || "").split(" ")[0];
+  const steps = [
+    { key: "has_customer", icon: "🏢", label: "Add your first customer",
+      hint: "The account whose equipment you service.", href: "#/customers", cta: "Add customer" },
+    { key: "has_equipment", icon: "⚙️", label: "Register a piece of equipment",
+      hint: "The asset you'll track repairs against.", href: "#/equipment", cta: "Add equipment" },
+    { key: "has_work_order", icon: "🔧", label: "Open a work order",
+      hint: "Track a repair from intake to ship &amp; invoice.", id: "obNewWo", cta: "New work order" },
+    { key: "has_team", icon: "👥", label: "Invite a teammate",
+      hint: canInvite ? "Bring in service writers and technicians." : "Ask an owner or manager to add staff.",
+      href: canInvite ? "#/team" : null, cta: "Invite teammate" },
+    { key: "has_template", icon: "📋", label: "Set up a spec or test template",
+      hint: "Standardize captured specs and pass/fail tests.", href: "#/templates", cta: "Configure templates" },
+  ];
+  const done = setup.done, total = setup.total;
+  const pct = Math.round((done / total) * 100);
+
+  const rows = steps.map((s) => {
+    const ok = !!setup[s.key];
+    const mark = ok
+      ? '<span aria-hidden="true" style="color:var(--ok,#16a34a);font-size:1.15rem;line-height:1">✓</span>'
+      : `<span aria-hidden="true" style="font-size:1.15rem;line-height:1">${s.icon}</span>`;
+    let action = "";
+    if (!ok) {
+      if (s.id) action = `<button class="btn btn-primary btn-sm" id="${s.id}">${s.cta} →</button>`;
+      else if (s.href) action = `<a class="btn btn-ghost btn-sm" href="${s.href}">${s.cta} →</a>`;
+      else action = `<span class="muted" style="font-size:.8rem">${s.hint}</span>`;
+    }
+    return `<div class="spread" style="padding:9px 0;border-top:1px solid var(--line);gap:12px;${ok ? "opacity:.6" : ""}">
+      <div class="row" style="gap:10px;align-items:baseline;min-width:0">
+        <span style="width:1.4rem;text-align:center;flex:none">${mark}</span>
+        <div style="min-width:0">
+          <div style="${ok ? "text-decoration:line-through" : "font-weight:600"}">${s.label}</div>
+          ${ok ? "" : `<div class="muted" style="font-size:.8rem">${s.hint}</div>`}
+        </div>
+      </div>
+      <div style="flex:none">${action}</div>
+    </div>`;
+  }).join("");
+
+  const header = setup.complete
+    ? `<h2 style="margin-bottom:4px">🎉 You're all set${firstName ? ", " + esc(firstName) : ""}!</h2>
+       <p class="muted" style="margin-bottom:14px">Your shop is fully configured. Here's your operational dashboard.</p>`
+    : `<div class="spread" style="align-items:flex-start;margin-bottom:4px">
+         <h2 style="margin-bottom:0">👋 Get your shop running${firstName ? ", " + esc(firstName) : ""}</h2>
+         <span class="muted" style="font-size:.85rem;white-space:nowrap">${done} of ${total} done</span>
+       </div>
+       <p class="muted" style="margin-bottom:14px">A few steps to get the most out of Serviceflow.</p>`;
+
+  const bar = `<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin-bottom:6px">
+      <div style="height:100%;width:${pct}%;background:var(--brand-500);transition:width .3s"></div></div>`;
+
+  const dismiss = setup.complete
+    ? `<div style="margin-top:14px;text-align:right"><button class="btn btn-primary btn-sm" id="obDismiss">Got it, hide this</button></div>`
+    : "";
+
+  return `<div class="card" id="setupChecklist" style="margin-bottom:22px;border-color:var(--brand-400)">
+      <div class="card-body">
+        ${header}
+        ${bar}
+        <div>${rows}</div>
+        ${dismiss}
+      </div></div>`;
 }
 
 /* ---------- work orders list ---------- */
