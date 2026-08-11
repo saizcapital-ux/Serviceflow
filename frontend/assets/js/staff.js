@@ -300,6 +300,23 @@ function woRow(w) {
 }
 function emptyRow(cols) { return `<tr><td colspan="${cols}" class="muted" style="text-align:center;padding:24px">No records.</td></tr>`; }
 
+// Friendly empty-state for a page with no records yet. `cta` is optional:
+// {id} wires a click handler after render, or {href} links to another route.
+function emptyState({ icon = "📭", title, body = "", cta = null } = {}) {
+  let action = "";
+  if (cta) {
+    action = cta.id
+      ? `<button class="btn btn-primary btn-sm" id="${cta.id}" style="margin-top:14px">${cta.label} →</button>`
+      : `<a class="btn btn-primary btn-sm" href="${cta.href}" style="margin-top:14px">${cta.label} →</a>`;
+  }
+  return `<div class="empty">
+      <div class="big">${icon}</div>
+      <div style="font-weight:600;font-size:1.05rem;margin-bottom:4px">${title}</div>
+      ${body ? `<div class="muted" style="max-width:420px;margin:0 auto">${body}</div>` : ""}
+      ${action}
+    </div>`;
+}
+
 async function renderWorkOrders(params = {}, title = "Work Orders") {
   loading();
   const list = await api.workOrders({ ...params, ...locParam() });
@@ -315,13 +332,9 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
         style="${mine ? "border-color:var(--brand-500);color:var(--brand-700)" : ""}">
         ${mine ? "✓ " : ""}👤 Assigned to me</button>
     </div>`;
-  view.innerHTML = `
-    <div class="page-title"><h1>${title}</h1>
-      <div class="row">
-        <button class="btn btn-ghost btn-sm" id="exportWo">⬇ Export CSV</button>
-        <button class="btn btn-primary btn-sm" id="pgNew">+ New Work Order</button></div></div>
-    ${title === "Work Orders" ? filterBar : ""}
-    <div class="card"><div class="table-wrap"><table class="data">
+  // Distinguish "no jobs at all yet" (new shop) from "no matches for this filter".
+  const isFiltered = !!(params.status || params.assigned_to);
+  const tableBody = `<div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>WO #</th><th>Equipment</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>SLA</th><th>Promised</th></tr></thead>
       <tbody>${list.map((w) => `<tr data-wo="${w.id}">
         <td class="mono nowrap">${esc(w.number)}</td>
@@ -333,6 +346,21 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
         <td class="nowrap">${slaBadge(w) || '<span class="muted">—</span>'}</td>
         <td class="nowrap muted">${fmtDate(w.promised_date)}</td></tr>`).join("") || emptyRow(8)}
       </tbody></table></div></div>`;
+  const body = (!list.length && !isFiltered)
+    ? `<div class="card"><div class="card-body">${emptyState({
+        icon: "🔧", title: "No work orders yet",
+        body: "A work order tracks one repair from intake through inspection, quote, repair, testing and shipment — with its own invoice and history.",
+        cta: { id: "emptyNewWo", label: "Open your first work order" },
+      })}</div></div>`
+    : tableBody;
+  view.innerHTML = `
+    <div class="page-title"><h1>${title}</h1>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="exportWo">⬇ Export CSV</button>
+        <button class="btn btn-primary btn-sm" id="pgNew">+ New Work Order</button></div></div>
+    ${title === "Work Orders" ? filterBar : ""}
+    ${body}`;
+  el("#emptyNewWo")?.addEventListener("click", openNewWorkOrder);
   el("#pgNew").addEventListener("click", openNewWorkOrder);
   el("#exportWo").addEventListener("click", () =>
     downloadAuthed("/api/work-orders/export.csv", "work-orders.csv").catch((e) => toast(e.message, "err")));
@@ -975,17 +1003,25 @@ async function openNewWorkOrder() {
 async function renderCustomers() {
   loading();
   const list = await api.customers();
-  view.innerHTML = `
-    <div class="page-title"><h1>Customers</h1>
-      <button class="btn btn-primary btn-sm" id="newCustomer">+ New customer</button></div>
-    <div class="card"><div class="table-wrap"><table class="data">
+  const body = list.length
+    ? `<div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>Account</th><th>Name</th><th>Contact</th><th>Phone</th></tr></thead>
       <tbody>${list.map((c) => `<tr data-cust="${c.id}">
         <td class="mono">${esc(c.account_number)}</td><td><strong>${esc(c.name)}</strong></td>
         <td>${esc(c.contacts?.[0]?.name || "—")}<div class="muted" style="font-size:.82rem">${esc(c.contacts?.[0]?.title || "")}</div></td>
-        <td class="muted">${esc(c.phone || "—")}</td></tr>`).join("") || emptyRow(4)}
-      </tbody></table></div></div>`;
+        <td class="muted">${esc(c.phone || "—")}</td></tr>`).join("")}
+      </tbody></table></div></div>`
+    : `<div class="card"><div class="card-body">${emptyState({
+        icon: "🏢", title: "No customers yet",
+        body: "Add the company whose equipment you service. You'll attach their equipment and work orders to this account.",
+        cta: { id: "emptyNewCustomer", label: "Add your first customer" },
+      })}</div></div>`;
+  view.innerHTML = `
+    <div class="page-title"><h1>Customers</h1>
+      <button class="btn btn-primary btn-sm" id="newCustomer">+ New customer</button></div>
+    ${body}`;
   el("#newCustomer").addEventListener("click", openNewCustomer);
+  el("#emptyNewCustomer")?.addEventListener("click", openNewCustomer);
   els("tr[data-cust]", view).forEach((tr) =>
     tr.addEventListener("click", () => (location.hash = `#/customers/${tr.dataset.cust}`)));
 }
@@ -1160,10 +1196,20 @@ async function renderEquipment() {
   const list = await api.equipment(null, currentLocation || null);
   const cust = customersCache || (customersCache = await api.customers());
   const byId = Object.fromEntries(cust.map((c) => [c.id, c.name]));
-  view.innerHTML = `
-    <div class="page-title"><h1>Equipment</h1>
-      <button class="btn btn-primary btn-sm" id="newEquip">+ New equipment</button></div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+  // Equipment must belong to a customer, so with none, send the user there first.
+  const empty = cust.length
+    ? emptyState({
+        icon: "⚙️", title: "No equipment yet",
+        body: "Register the assets you service — pumps, motors, valves. Each one carries its own repair history and spec sheet.",
+        cta: { id: "emptyNewEquip", label: "Add equipment" },
+      })
+    : emptyState({
+        icon: "🏢", title: "Add a customer first",
+        body: "Equipment belongs to a customer account. Create a customer, then come back to register their equipment.",
+        cta: { href: "#/customers", label: "Go to Customers" },
+      });
+  const body = list.length
+    ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
       ${list.map((e) => `<div class="card card-pad" data-eqid="${e.id}" style="cursor:pointer">
         <div class="row" style="margin-bottom:8px"><span style="font-size:1.8rem">${TYPE_ICON[e.equipment_type]}</span>
           <div><strong>${esc(e.tag || TYPE_LABEL[e.equipment_type])}</strong>
@@ -1171,10 +1217,15 @@ async function renderEquipment() {
         <dl class="kv"><dt>Owner</dt><dd>${esc(byId[e.customer_id] || "—")}</dd>
           <dt>Make/Model</dt><dd>${esc(e.manufacturer || "—")} ${esc(e.model || "")}</dd>
           <dt>Serial</dt><dd class="mono" style="font-size:.82rem">${esc(e.serial_number || "—")}</dd>
-          <dt>Location</dt><dd>${esc(e.location || "—")}</dd></dl></div>`).join("") ||
-      '<div class="empty"><div class="big">⚙️</div>No equipment yet.</div>'}
-    </div>`;
+          <dt>Location</dt><dd>${esc(e.location || "—")}</dd></dl></div>`).join("")}
+    </div>`
+    : `<div class="card"><div class="card-body">${empty}</div></div>`;
+  view.innerHTML = `
+    <div class="page-title"><h1>Equipment</h1>
+      <button class="btn btn-primary btn-sm" id="newEquip">+ New equipment</button></div>
+    ${body}`;
   el("#newEquip").addEventListener("click", () => openNewEquipment());
+  el("#emptyNewEquip")?.addEventListener("click", () => openNewEquipment());
   els("[data-eqid]").forEach((c) => c.addEventListener("click", () => (location.hash = `#/equipment/${c.dataset.eqid}`)));
 }
 
@@ -1456,14 +1507,7 @@ async function renderInventory(lowOnly = false) {
   const list = await api.parts(lowOnly ? { low_stock: true } : {});
   partsCache = await api.parts();
   const lowCount = partsCache.filter((p) => p.quantity_on_hand <= p.reorder_point).length;
-  view.innerHTML = `
-    <div class="page-title"><h1>Inventory</h1>
-      <div class="row">
-        <button class="btn btn-ghost btn-sm ${lowOnly ? "" : ""}" id="lowToggle"
-          style="${lowOnly ? "border-color:var(--accent-500);color:var(--accent-600)" : ""}">⚠ Low stock (${lowCount})</button>
-        <button class="btn btn-primary btn-sm" id="addPart">+ Add part</button>
-      </div></div>
-    <div class="card"><div class="table-wrap"><table class="data">
+  const tableCard = `<div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>SKU</th><th>Part</th><th>Location</th><th class="text-right">On hand</th><th class="text-right">Reorder</th><th class="text-right">Unit price</th><th></th></tr></thead>
       <tbody>${list.map((p) => {
         const low = p.quantity_on_hand <= p.reorder_point;
@@ -1478,10 +1522,27 @@ async function renderInventory(lowOnly = false) {
             <button class="btn btn-ghost btn-sm" data-adj="${p.id}" data-d="-1">−</button>
             <button class="btn btn-ghost btn-sm" data-adj="${p.id}" data-d="1">+</button>
             <button class="btn btn-ghost btn-sm" data-recv="${p.id}">Receive</button></td></tr>`;
-      }).join("") || '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No parts. Add your catalog.</td></tr>'}
+      }).join("") || '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No low-stock parts. 🎉</td></tr>'}
       </tbody></table></div></div>`;
+  // Truly-empty catalog (not just an empty low-stock view) gets a friendly prompt.
+  const body = (!partsCache.length)
+    ? `<div class="card"><div class="card-body">${emptyState({
+        icon: "📦", title: "Your parts catalog is empty",
+        body: "Add the parts and consumables you stock. Serviceflow tracks on-hand quantities, flags low stock, and deducts parts as they're consumed on work orders.",
+        cta: { id: "emptyAddPart", label: "Add your first part" },
+      })}</div></div>`
+    : tableCard;
+  view.innerHTML = `
+    <div class="page-title"><h1>Inventory</h1>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="lowToggle"
+          style="${lowOnly ? "border-color:var(--accent-500);color:var(--accent-600)" : ""}">⚠ Low stock (${lowCount})</button>
+        <button class="btn btn-primary btn-sm" id="addPart">+ Add part</button>
+      </div></div>
+    ${body}`;
   els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
   el("#addPart").addEventListener("click", openAddPart);
+  el("#emptyAddPart")?.addEventListener("click", openAddPart);
   el("#lowToggle").addEventListener("click", () => renderInventory(!lowOnly));
   els("[data-adj]").forEach((b) => b.addEventListener("click", async () => {
     try { await api.adjustStock(b.dataset.adj, +b.dataset.d); renderInventory(lowOnly); }
