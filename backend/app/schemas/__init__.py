@@ -120,6 +120,63 @@ class SpecFieldOut(ORMModel):
     position: int
 
 
+_TEST_RESULTS = {"pending", "pass", "fail", "na"}
+
+
+class TestTemplateItemCreate(BaseModel):
+    equipment_type: EquipmentType
+    label: str = Field(min_length=1, max_length=120)
+    unit: str | None = Field(default=None, max_length=20)
+    position: int = 0
+
+    @field_validator("equipment_type", mode="before")
+    @classmethod
+    def _coerce_type(cls, v):
+        return v.value if isinstance(v, EquipmentType) else v
+
+
+class TestTemplateItemUpdate(BaseModel):
+    label: str | None = Field(default=None, min_length=1, max_length=120)
+    unit: str | None = Field(default=None, max_length=20)
+    position: int | None = None
+
+
+class TestTemplateItemOut(ORMModel):
+    id: int
+    equipment_type: EquipmentType
+    label: str
+    unit: str | None = None
+    position: int
+
+
+class TestResultOut(ORMModel):
+    id: int
+    label: str
+    unit: str | None = None
+    value: str | None = None
+    result: str
+    notes: str | None = None
+    position: int
+
+
+class TestResultUpdate(BaseModel):
+    value: str | None = Field(default=None, max_length=120)
+    result: str | None = None
+    notes: str | None = None
+
+    @field_validator("result")
+    @classmethod
+    def _valid_result(cls, v):
+        if v is not None and v not in _TEST_RESULTS:
+            raise ValueError("result must be one of: pending, pass, fail, na")
+        return v
+
+
+class TestReportOut(BaseModel):
+    overall: str  # none | in_progress | passed | failed
+    items: list[TestResultOut]
+
+
 class TeamMemberOut(ORMModel):
     id: int
     full_name: str

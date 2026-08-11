@@ -155,6 +155,7 @@ async function router() {
     if (route === "team") return renderTeam();
     if (route === "templates") return renderSpecTemplates();
     if (route === "account") return renderAccount();
+    if (route === "help") return renderHelp();
     if (route === "developer") return renderDeveloper();
     if (route === "billing") return renderBilling();
     if (route === "analytics") return renderAnalytics();
@@ -364,6 +365,9 @@ async function renderWorkOrder(id) {
           <div class="card-body" id="checklist"><p class="muted">Loading…</p></div></div>
         <div class="card"><div class="card-head"><h3>Inspection findings</h3></div>
           <div class="card-body">${findings}</div></div>
+        <div class="card"><div class="card-head"><h3>Test report</h3>
+          <span id="testOverall" class="badge"></span></div>
+          <div class="card-body" id="testReport"><p class="muted">Loading…</p></div></div>
         <div class="card"><div class="card-head"><h3>Attachments &amp; photos</h3>
           <button class="btn btn-ghost btn-sm" id="uploadBtn">+ Upload</button></div>
           <div class="card-body">${attachments}</div></div>
@@ -434,6 +438,7 @@ async function renderWorkOrder(id) {
   el("#uploadBtn").addEventListener("click", () => openUpload(w.id));
   el("#usePart").addEventListener("click", () => openUsePart(w.id));
   renderChecklist(w);
+  renderTestReport(w);
   el("#editPo").addEventListener("click", async () => {
     const po = prompt("Customer PO number for this job:", w.po_number || "");
     if (po === null) return;
@@ -491,6 +496,61 @@ function openUpload(woId) {
       m.close(); toast("Uploaded", "ok"); renderWorkOrder(woId);
     } catch (ex) { toast(ex.message, "err"); }
   };
+}
+
+const TEST_OVERALL = {
+  passed: { cls: "ready", label: "✓ PASSED" },
+  failed: { cls: "cancelled", label: "✗ FAILED" },
+  in_progress: { cls: "quote_pending", label: "In progress" },
+};
+const RESULT_OPTS = ["pending", "pass", "fail", "na"];
+const RESULT_LABEL = { pending: "—", pass: "Pass", fail: "Fail", na: "N/A" };
+
+async function renderTestReport(w) {
+  const box = el("#testReport");
+  if (!box) return;
+  let rep;
+  try { rep = await api.woTests(w.id); } catch (e) { box.innerHTML = `<p class="muted">${esc(e.message)}</p>`; return; }
+
+  const badge = el("#testOverall");
+  const ov = TEST_OVERALL[rep.overall];
+  if (badge) { badge.className = "badge" + (ov ? ` status ${ov.cls}` : " hide"); badge.textContent = ov ? ov.label : ""; }
+
+  if (!rep.items.length) {
+    box.innerHTML = w.equipment_id
+      ? `<p class="muted" style="font-size:.85rem;margin-bottom:10px">Run the standard tests for this ${TYPE_LABEL[w.equipment?.equipment_type] || "unit"}.</p>
+         <button class="btn btn-primary btn-sm" id="applyTests">Apply test template</button>`
+      : '<p class="muted">Attach equipment to this work order to run tests.</p>';
+    el("#applyTests")?.addEventListener("click", async () => {
+      try { await api.applyTests(w.id); toast("Test template applied", "ok"); renderTestReport(w); }
+      catch (e) { toast(e.message, "err"); }
+    });
+    return;
+  }
+
+  box.innerHTML = `<div class="table-wrap"><table class="data">
+    <thead><tr><th>Test</th><th>Value</th><th>Result</th><th>Notes</th></tr></thead>
+    <tbody>${rep.items.map((i) => `<tr data-nostyle class="test-row ${i.result}">
+      <td><strong>${esc(i.label)}</strong>${i.unit ? ` <span class="muted">(${esc(i.unit)})</span>` : ""}</td>
+      <td><input data-test-val="${i.id}" value="${esc(i.value || "")}" style="width:90px;padding:.25rem .4rem" /></td>
+      <td><select data-test-res="${i.id}" style="padding:.25rem .4rem">
+        ${RESULT_OPTS.map((r) => `<option value="${r}" ${r === i.result ? "selected" : ""}>${RESULT_LABEL[r]}</option>`).join("")}</select></td>
+      <td><input data-test-note="${i.id}" value="${esc(i.notes || "")}" placeholder="—" style="width:100%;padding:.25rem .4rem" /></td>
+    </tr>`).join("")}</tbody></table></div>
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button class="btn btn-ghost btn-sm" id="printTestReport">🖨 Print report</button></div>`;
+  el("#printTestReport")?.addEventListener("click", () =>
+    openAuthed(`/api/work-orders/${w.id}/test-report.pdf`).catch((e) => toast(e.message, "err")));
+
+  const save = async (id, body, rerender) => {
+    try { await api.updateTestResult(id, body); if (rerender) renderTestReport(w); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  // Result change re-renders (updates overall + row color).
+  els("[data-test-res]", box).forEach((s) => s.addEventListener("change", () => save(s.dataset.testRes, { result: s.value }, true)));
+  // Value/notes save on blur without a full re-render.
+  els("[data-test-val]", box).forEach((i) => i.addEventListener("change", () => save(i.dataset.testVal, { value: i.value.trim() }, false)));
+  els("[data-test-note]", box).forEach((i) => i.addEventListener("change", () => save(i.dataset.testNote, { notes: i.value.trim() }, false)));
 }
 
 function renderChecklist(w) {
@@ -1087,7 +1147,8 @@ async function renderEquipmentDetail(id) {
     <div class="grid" style="grid-template-columns:1.6fr 1fr;align-items:start">
       <div class="stack">
         <div class="card"><div class="card-head"><h3>Nameplate</h3>
-          <button class="btn btn-ghost btn-sm" id="editEq">✎ Edit</button></div>
+          <div class="row"><button class="btn btn-ghost btn-sm" id="specSheet">🖨 Spec sheet</button>
+            <button class="btn btn-ghost btn-sm" id="editEq">✎ Edit</button></div></div>
           <div class="card-body">
             <dl class="kv"><dt>Serial</dt><dd class="mono">${esc(eq.serial_number || "—")}</dd>
               <dt>Location</dt><dd>${esc(eq.location || "—")}</dd></dl>
@@ -1112,6 +1173,8 @@ async function renderEquipmentDetail(id) {
   catch { el("#qrBox").innerHTML = '<span class="muted">QR unavailable</span>'; }
   el("#printLabel").addEventListener("click", () => printLabel(eq, owner, svg));
   el("#editEq").addEventListener("click", () => openEditEquipment(eq));
+  el("#specSheet").addEventListener("click", () =>
+    openAuthed(`/api/equipment/${eq.id}/spec-sheet.pdf`).catch((e) => toast(e.message, "err")));
 }
 
 async function openEditEquipment(eq) {
@@ -1750,16 +1813,23 @@ async function renderSpecTemplates() {
   loading();
   const types = Object.keys(TYPE_LABEL);
   if (!types.includes(specType)) specType = types[0];
-  const [fields, report] = await Promise.all([api.specTemplates(specType), api.specReport(specType)]);
+  const [fields, report, testItems] = await Promise.all([
+    api.specTemplates(specType), api.specReport(specType), api.testTemplates(specType)]);
   const rows = fields.map((f) => `<tr data-nostyle>
     <td><strong>${esc(f.label)}</strong></td>
     <td class="muted">${esc(f.unit || "—")}</td>
     <td class="text-right"><button class="btn btn-danger btn-sm" data-del-spec="${f.id}">Remove</button></td></tr>`).join("") ||
     '<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">No spec fields for this type yet.</td></tr>';
 
+  const testRows = testItems.map((t) => `<tr data-nostyle>
+    <td><strong>${esc(t.label)}</strong></td>
+    <td class="muted">${esc(t.unit || "—")}</td>
+    <td class="text-right"><button class="btn btn-danger btn-sm" data-del-test="${t.id}">Remove</button></td></tr>`).join("") ||
+    '<tr><td colspan="3" class="muted" style="text-align:center;padding:18px">No test items for this type yet.</td></tr>';
+
   view.innerHTML = `
-    <div class="page-title"><h1>Spec Templates</h1>
-      <span class="muted">Define the specs captured for each equipment type</span></div>
+    <div class="page-title"><h1>Templates</h1>
+      <span class="muted">Specs to capture and tests to run for each equipment type</span></div>
     <div class="card"><div class="card-head">
         <label class="field" style="margin:0"><span class="muted" style="font-size:.78rem">Equipment type</span>
           <select id="specTypeSel">${types.map((t) => `<option value="${t}" ${t === specType ? "selected" : ""}>${TYPE_LABEL[t]}</option>`).join("")}</select></label>
@@ -1775,6 +1845,20 @@ async function renderSpecTemplates() {
         <div class="table-wrap"><table class="data">
           <thead><tr><th>Field</th><th>Unit</th><th></th></tr></thead>
           <tbody>${rows}</tbody></table></div>
+      </div></div>
+
+    <div class="card" style="margin-top:18px"><div class="card-head"><h3>Test items — ${TYPE_LABEL[specType]}</h3></div>
+      <div class="card-body">
+        <p class="muted" style="font-size:.85rem;margin-bottom:12px">Pass/fail tests technicians run on each
+          ${TYPE_LABEL[specType].toLowerCase()} (e.g. a motor's megger test). They appear as the Test report on the work order.</p>
+        <div class="row" style="align-items:flex-end;gap:8px;margin-bottom:14px">
+          <label class="field grow" style="max-width:300px"><span>New test</span><input id="testLabel" placeholder="e.g. Insulation Resistance (Megger)" /></label>
+          <label class="field" style="max-width:120px"><span>Unit (optional)</span><input id="testUnit" placeholder="MΩ" /></label>
+          <button class="btn btn-primary" id="testAdd">Add test</button>
+        </div>
+        <div class="table-wrap"><table class="data">
+          <thead><tr><th>Test</th><th>Unit</th><th></th></tr></thead>
+          <tbody>${testRows}</tbody></table></div>
       </div></div>
 
     <div class="card" style="margin-top:18px"><div class="card-head">
@@ -1845,6 +1929,19 @@ async function renderSpecTemplates() {
     try { await api.deleteSpecField(b.dataset.delSpec); toast("Field removed", ""); renderSpecTemplates(); }
     catch (e) { toast(e.message, "err"); }
   }));
+  el("#testAdd").addEventListener("click", async () => {
+    const label = el("#testLabel").value.trim();
+    if (!label) return toast("Enter a test name", "err");
+    try {
+      await api.createTestItem({ equipment_type: specType, label, unit: el("#testUnit").value.trim() || null, position: testItems.length });
+      toast("Test added", "ok"); renderSpecTemplates();
+    } catch (e) { toast(e.message, "err"); }
+  });
+  els("[data-del-test]").forEach((b) => b.addEventListener("click", async () => {
+    if (!confirm("Remove this test item? Results already recorded on jobs are not deleted.")) return;
+    try { await api.deleteTestItem(b.dataset.delTest); toast("Test removed", ""); renderSpecTemplates(); }
+    catch (e) { toast(e.message, "err"); }
+  }));
 }
 
 /* ---------- account settings ---------- */
@@ -1893,6 +1990,118 @@ async function renderAccount() {
       toast("Password updated", "ok");
     } catch (e) { toast(e.message, "err"); }
   });
+}
+
+function renderHelp() {
+  const u = auth.user || {};
+  const role = u.role || "technician";
+  const isLead = ["owner", "manager"].includes(role);
+  const isWriter = role === "service_writer";
+  const isTech = role === "technician";
+  const first = (u.full_name || "").trim().split(/\s+/)[0] || "there";
+
+  // Role-aware quick-start steps.
+  const steps = isLead ? [
+    ["Set up your shop", 'Add your team under <a href="#/team">Team</a> (invite writers &amp; technicians), then define reusable spec fields and pass/fail test items on <a href="#/templates">Templates</a> for the equipment you service.'],
+    ["Add customers &amp; equipment", 'Create customers and their assets under <a href="#/customers">Customers</a> and <a href="#/equipment">Equipment</a> — or bulk-import equipment from a spreadsheet on the Templates screen.'],
+    ["Run the work", 'Open a job with <b>+ New Work Order</b> (top right). Move it through intake → diagnosis → quote → repair → QC, recording findings, labor, and parts as you go.'],
+    ["Prove quality", 'On each work order, apply the <b>Test / inspection report</b>, record readings, and mark pass/fail. One failure flips the unit to <b>FAILED</b> — the printable report and portal show exactly what happened.'],
+    ["Bill &amp; measure", 'Send quotes for approval, generate invoices, and watch throughput, on-time rate, and first-pass yield on <a href="#/analytics">Analytics</a>.'],
+  ] : isWriter ? [
+    ["Take in the job", 'Click <b>+ New Work Order</b> (top right), pick the customer and their equipment, and capture the reported problem. New portal requests also land in your <a href="#/workorders">Work Orders</a> queue at intake.'],
+    ["Keep it moving", 'Assign a technician, update status as work progresses, and post updates the customer can see from their portal.'],
+    ["Quote &amp; approve", "Build a quote from the diagnosis and send it. When the customer approves (with a PO if needed), the job is cleared to proceed."],
+    ["Close it out", "Once QC and the test report pass, generate the invoice and mark the unit delivered."],
+  ] : [
+    ["Find your jobs", 'Open <a href="#/workorders">Work Orders</a> and use <b>Assigned to me</b> to see your queue. Tap a job to see the reported problem, equipment specs, and history.'],
+    ["Do the work", "Log your findings, labor time, and parts used. Work the job checklist so nothing gets missed."],
+    ["Record test results", 'Open the <b>Test / inspection report</b>, apply the template for that unit, enter each reading, and mark <b>Pass</b>, <b>Fail</b>, or <b>N/A</b>. If a test like megger/insulation resistance fails, mark it failed and add a note — the report and the customer will show it as <b>FAILED</b>.'],
+    ["Hand it off", "When your results are in and the checklist is done, update the status so the service writer can quote or close the job."],
+  ];
+  const stepsHtml = steps.map(([t, d], i) => `
+    <div class="row" style="align-items:flex-start;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)">
+      <div class="stat-value" style="min-width:32px;font-size:1.1rem;color:var(--brand)">${i + 1}</div>
+      <div><b>${t}</b><div class="muted" style="margin-top:2px;line-height:1.5">${d}</div></div>
+    </div>`).join("");
+
+  // Work-order lifecycle chips.
+  const lifecycle = ["Intake", "Diagnosis", "Quote", "Approved", "In repair", "QC / testing", "Invoiced", "Delivered"];
+  const flow = lifecycle.map((s, i) =>
+    `<span class="badge">${s}</span>${i < lifecycle.length - 1 ? '<span class="muted" style="margin:0 2px">→</span>' : ""}`).join("");
+
+  // Feature directory — role-gated cards.
+  const feat = (route, icon, title, desc, show = true) => show
+    ? `<a class="card" href="#/${route}" style="text-decoration:none;color:inherit;display:block">
+         <div class="card-body"><div style="font-size:1.3rem">${icon}</div>
+           <b style="display:block;margin:6px 0 2px">${title}</b>
+           <span class="muted" style="font-size:.85rem;line-height:1.45">${desc}</span></div></a>`
+    : "";
+  const features = [
+    feat("workorders", "🔧", "Work Orders", "The heart of the shop — every repair, from intake to delivery."),
+    feat("field", "📍", "Field Service", "Schedule and dispatch on-site jobs to your technicians."),
+    feat("customers", "🏢", "Customers", "Accounts, contacts, and the equipment you service for each."),
+    feat("equipment", "⚙️", "Equipment", "Every asset, its nameplate specs, and its full repair history."),
+    feat("templates", "📐", "Templates", "Reusable spec fields, pass/fail test items, and bulk import.", isLead),
+    feat("inventory", "📦", "Inventory", "Parts catalog with on-hand counts and low-stock alerts."),
+    feat("invoices", "🧾", "Invoices", "Bill approved work and export or print a PDF."),
+    feat("analytics", "📈", "Analytics", "Throughput, on-time rate, and first-pass yield — with a PDF report.", isLead),
+    feat("team", "👥", "Team", "Invite staff and manage roles and access.", isLead),
+  ].join("");
+
+  view.innerHTML = `
+    <div class="page-title"><h1>Help &amp; getting started</h1>
+      <span class="muted">You're signed in as ${esc(ROLE_LABELS[role] || role)}</span></div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <h2 style="margin:0 0 4px">Welcome to Serviceflow, ${esc(first)} 👋</h2>
+        <p class="muted" style="margin:0;line-height:1.55;max-width:70ch">
+          Serviceflow runs your repair shop end to end — intake, diagnosis, quoting, repair,
+          quality testing, invoicing, and a self-service portal for your customers. Here's how to
+          get going with the parts that matter for your role.</p>
+      </div></div>
+
+    <div class="grid" style="grid-template-columns:1.3fr 1fr;align-items:start;gap:16px">
+      <div class="card"><div class="card-head"><h3>Quick start</h3></div>
+        <div class="card-body" style="padding-top:4px">${stepsHtml}</div></div>
+
+      <div class="stack" style="gap:16px">
+        <div class="card"><div class="card-head"><h3>The work-order lifecycle</h3></div>
+          <div class="card-body">
+            <div class="row" style="flex-wrap:wrap;gap:6px;align-items:center">${flow}</div>
+            <p class="muted" style="margin:12px 0 0;line-height:1.5;font-size:.88rem">
+              Every job follows this path. Status changes are logged on the work order's timeline,
+              and customers see the milestones you choose to share.</p>
+          </div></div>
+
+        <div class="card"><div class="card-head"><h3>Your customer portal</h3></div>
+          <div class="card-body">
+            <p class="muted" style="margin:0;line-height:1.55;font-size:.9rem">
+              Customers get their own secure login to submit repair requests, watch job status,
+              approve quotes, read the pass/fail test report, and pay invoices — cutting down the
+              status calls to your front desk.</p>
+          </div></div>
+      </div>
+    </div>
+
+    <div class="page-title" style="margin-top:24px"><h2 style="margin:0">Explore the app</h2></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">${features}</div>
+
+    <div class="card" style="margin-top:20px"><div class="card-head"><h3>Need a hand?</h3></div>
+      <div class="card-body">
+        <p class="muted" style="margin:0 0 10px;line-height:1.55">
+          Tips for finding your way around:</p>
+        <ul class="muted" style="margin:0 0 12px;padding-left:20px;line-height:1.7">
+          <li>Use the <b>search bar</b> up top to jump straight to any work order, customer, or asset.</li>
+          <li>Switch between <b>light and dark</b> with the toggle in the bottom-left.</li>
+          <li>Update your name or password anytime under <a href="#/account">Account settings</a>.</li>
+          ${isLead ? "<li>Only owners and managers see Team, Templates, Analytics, and the Audit log.</li>" : ""}
+        </ul>
+        <div class="row" style="gap:10px;flex-wrap:wrap">
+          <a class="btn btn-ghost btn-sm" href="/terms.html" target="_blank" rel="noopener">Terms of Service</a>
+          <a class="btn btn-ghost btn-sm" href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>
+        </div>
+      </div></div>`;
 }
 
 function openNewKey() {

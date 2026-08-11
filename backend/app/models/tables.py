@@ -533,3 +533,38 @@ class EquipmentSpecField(Base):
     unit: Mapped[str | None] = mapped_column(String(20))
     position: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TestTemplateItem(Base):
+    """A per-organization test/inspection item to run for an equipment type
+    (e.g. Motor → "Insulation Resistance (Megger)" in MΩ). equipment_type is a
+    plain string (matching EquipmentType values) to keep migrations enum-free.
+    """
+
+    __tablename__ = "test_template_items"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    equipment_type: Mapped[str] = mapped_column(String(20), index=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    unit: Mapped[str | None] = mapped_column(String(20))
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class TestResult(Base):
+    """A single test line on a work order's test report: a measured value and a
+    pass/fail result. `result` is a plain string: pending|pass|fail|na.
+    """
+
+    __tablename__ = "test_results"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    work_order_id: Mapped[int] = mapped_column(ForeignKey("work_orders.id"), index=True)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    unit: Mapped[str | None] = mapped_column(String(20))
+    value: Mapped[str | None] = mapped_column(String(120))
+    result: Mapped[str] = mapped_column(String(10), default="pending")  # pending|pass|fail|na
+    notes: Mapped[str | None] = mapped_column(Text)
+    position: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

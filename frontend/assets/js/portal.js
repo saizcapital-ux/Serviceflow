@@ -139,7 +139,20 @@ function miniTracker(status) {
 async function renderDetail(id) {
   loading();
   const w = await api.portalWorkOrder(id);
+  let tests = { overall: "none", items: [] };
+  try { tests = await api.portalTests(id); } catch { /* none */ }
   const eq = w.equipment;
+  const TEST_OV = { passed: ["ready", "✓ Passed"], failed: ["cancelled", "✗ Failed"], in_progress: ["quote_pending", "In progress"] };
+  const RLABEL = { pending: "—", pass: "Pass", fail: "Fail", na: "N/A" };
+  const testCard = tests.items.length ? `
+    <div class="card" style="margin-bottom:18px"><div class="card-head"><h3>Inspection / test report</h3>
+      ${TEST_OV[tests.overall] ? `<span class="badge status ${TEST_OV[tests.overall][0]}">${TEST_OV[tests.overall][1]}</span>` : ""}</div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Test</th><th>Value</th><th>Result</th></tr></thead>
+        <tbody>${tests.items.map((i) => `<tr data-nostyle>
+          <td><strong>${esc(i.label)}</strong>${i.unit ? ` <span class="muted">(${esc(i.unit)})</span>` : ""}</td>
+          <td>${esc(i.value || "—")}</td>
+          <td><span class="badge status ${i.result === "pass" ? "ready" : i.result === "fail" ? "cancelled" : "intake"}">${RLABEL[i.result] || i.result}</span></td></tr>`).join("")}</tbody></table></div></div>` : "";
   const pendingQuote = w.quotes.find((q) => q.status === "sent" || q.status === "draft");
   const limit = w.customer?.approval_limit;
   const overLimit = pendingQuote && limit != null && pendingQuote.total > limit;
@@ -157,6 +170,7 @@ async function renderDetail(id) {
     </div>
     <div class="card card-pad" style="margin-bottom:18px">${bigTracker(w.status)}</div>
     ${pendingQuote ? quoteApprovalCard(pendingQuote, w, overLimit, limit) : ""}
+    ${testCard}
     <div class="grid" style="grid-template-columns:1.4fr 1fr">
       <div class="card"><div class="card-head"><h3>Activity &amp; messages</h3></div>
         <div class="card-body">

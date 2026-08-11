@@ -7,7 +7,17 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.deps import require_staff
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import Contact, Customer, Equipment, Location, User
+from app.models import (
+    Contact,
+    Customer,
+    Equipment,
+    EquipmentSpecField,
+    Location,
+    Organization,
+    User,
+    WorkOrder,
+)
+from app.services.pdf import render_equipment_spec_sheet
 from app.schemas import (
     ContactCreate,
     ContactOut,
@@ -166,3 +176,37 @@ def equipment_qr(equipment_id: int, db: Session = Depends(get_db), user: User = 
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
     url = f"{settings.app_base_url}/app/#/equipment/{equipment_id}"
     return Response(content=qr_svg(url), media_type="image/svg+xml")
+
+
+@router.get("/equipment/{equipment_id}/spec-sheet.pdf")
+def equipment_spec_sheet(equipment_id: int, db: Session = Depends(get_db), user: User = Depends(require_staff)):
+    """Printable one-page asset spec sheet (identity, specs, repair history)."""
+    equipment = db.scalar(
+        select(Equipment).where(
+            Equipment.id == equipment_id, Equipment.organization_id == user.organization_id
+        )
+    )
+    if not equipment:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Equipment not found.")
+    org = db.get(Organization, user.organization_id)
+    customer = db.get(Customer, equipment.customer_id)
+    spec_fields = [
+        (f.label, f.unit) for f in db.scalars(
+            select(EquipmentSpecField).where(
+                EquipmentSpecField.organization_id == user.organization_id,
+                EquipmentSpecField.equipment_type == equipment.equipment_type.value,
+            ).order_by(EquipmentSpecField.position, EquipmentSpecField.id)
+        ).all()
+    ]
+    history = db.scalars(
+        select(WorkOrder).where(
+            WorkOrder.organization_id == user.organization_id,
+            WorkOrder.equipment_id == equipment_id,
+        ).order_by(WorkOrder.created_at.desc())
+    ).all()
+    pdf = render_equipment_spec_sheet(
+        org=org, equipment=equipment, customer=customer, spec_fields=spec_fields, history=history
+    )
+    fname = f"spec-{equipment.tag or equipment.serial_number or equipment.id}.pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{fname}"'})

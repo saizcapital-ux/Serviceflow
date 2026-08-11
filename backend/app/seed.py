@@ -38,6 +38,7 @@ from app.models import (
     QuoteLine,
     QuoteStatus,
     ServiceType,
+    TestTemplateItem,
     TimeEntry,
     User,
     UserRole,
@@ -93,6 +94,20 @@ def seed(reset_first: bool = True) -> None:
             for _pos, (_label, _unit) in enumerate(_fields):
                 db.add(EquipmentSpecField(organization_id=org.id, equipment_type=_etype,
                                           label=_label, unit=_unit, position=_pos))
+        db.flush()
+
+        # ---- Test/inspection templates (pass/fail items per type) ----
+        _test_defaults = {
+            "motor": [("Insulation Resistance (Megger)", "MΩ"), ("Winding Resistance", "Ω"),
+                      ("Surge Comparison Test", None), ("Vibration", "in/s"), ("No-Load Run Test", None)],
+            "pump": [("Hydrostatic Test", "psi"), ("Performance Test", "GPM"), ("Vibration", "in/s"),
+                     ("Seal Leak Check", None)],
+            "valve": [("Seat Leak Test", None), ("Stroke Test", None), ("Torque Check", "ft-lb")],
+        }
+        for _etype, _items in _test_defaults.items():
+            for _pos, (_label, _unit) in enumerate(_items):
+                db.add(TestTemplateItem(organization_id=org.id, equipment_type=_etype,
+                                        label=_label, unit=_unit, position=_pos))
         db.flush()
 
         # ---- Staff users ----
