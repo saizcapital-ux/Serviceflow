@@ -21,6 +21,15 @@ def test_dashboard_has_open_work_orders(client, staff_headers):
     assert r.json()["open_work_orders"] >= 1
 
 
+def test_dashboard_setup_progress_complete_for_seeded_org(client, staff_headers):
+    setup = client.get("/api/dashboard", headers=staff_headers).json()["setup"]
+    # The seeded demo shop has customers, equipment, jobs, staff and templates.
+    assert setup["has_customer"] and setup["has_equipment"] and setup["has_work_order"]
+    assert setup["has_team"] and setup["has_template"]
+    assert setup["done"] == setup["total"] == 5
+    assert setup["complete"] is True
+
+
 def test_customer_cannot_access_staff_endpoint(client, portal_headers):
     assert client.get("/api/dashboard", headers=portal_headers).status_code == 403
 

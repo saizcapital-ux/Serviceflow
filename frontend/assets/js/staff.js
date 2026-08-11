@@ -178,31 +178,7 @@ async function renderDashboard() {
     .map((s) => `<div class="spread" style="padding:6px 0">${statusBadge(s.status)}
       <strong>${s.count}</strong></div>`).join("");
 
-  // First-run onboarding for a brand-new shop with no jobs yet.
-  const isNewShop = d.recent.length === 0 && d.open_work_orders === 0
-    && d.awaiting_approval === 0 && d.ready_to_ship === 0;
-  const canInvite = ["owner", "manager"].includes((auth.user || {}).role);
-  const firstName = ((auth.user || {}).full_name || "").split(" ")[0];
-  const onboarding = isNewShop ? `
-    <div class="card" style="margin-bottom:22px;border-color:var(--brand-400)">
-      <div class="card-body">
-        <h2 style="margin-bottom:4px">👋 Welcome to Serviceflow${firstName ? ", " + esc(firstName) : ""}!</h2>
-        <p class="muted" style="margin-bottom:16px">Your shop is ready. Three steps to get rolling:</p>
-        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px">
-          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
-            <div style="font-size:1.6rem">🏢</div><strong>1. Add a customer</strong>
-            <p class="muted" style="font-size:.85rem">Create the customer whose equipment you service.</p>
-            <a class="btn btn-ghost btn-sm" href="#/customers" style="align-self:flex-start">Add customer →</a></div></div>
-          <div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
-            <div style="font-size:1.6rem">🔧</div><strong>2. Create a work order</strong>
-            <p class="muted" style="font-size:.85rem">Track a repair from intake to ship &amp; invoice.</p>
-            <button class="btn btn-primary btn-sm" id="obNewWo" style="align-self:flex-start">New work order →</button></div></div>
-          ${canInvite ? `<div class="card" style="box-shadow:none;border-color:var(--line)"><div class="card-body stack">
-            <div style="font-size:1.6rem">👥</div><strong>3. Invite your team</strong>
-            <p class="muted" style="font-size:.85rem">Bring in service writers and technicians.</p>
-            <a class="btn btn-ghost btn-sm" href="#/team" style="align-self:flex-start">Invite teammate →</a></div></div>` : ""}
-        </div>
-      </div></div>` : "";
+  const onboarding = setupChecklist(d.setup);
 
   view.innerHTML = `
     <div class="page-title"><h1>Dashboard</h1>
@@ -231,8 +207,129 @@ async function renderDashboard() {
       </div>
     </div>`;
   el("#obNewWo")?.addEventListener("click", openNewWorkOrder);
+  el("#obDismiss")?.addEventListener("click", () => {
+    localStorage.setItem("sf_setup_dismissed", "1");
+    el("#setupChecklist")?.remove();
+  });
+  el("#obLoadSample")?.addEventListener("click", (e) => loadSampleData(e.currentTarget));
+  el("#obRemoveSample")?.addEventListener("click", (e) => removeSampleData(e.currentTarget));
   wireWoRows();
   hydrateEquipment();
+}
+
+// First-run setup checklist. Renders until every milestone is met, then shows a
+// one-time "all set" state the user can dismiss; stays hidden once dismissed.
+function setupChecklist(setup) {
+  if (!setup) return "";
+  const dismissed = localStorage.getItem("sf_setup_dismissed") === "1";
+  // Once complete and acknowledged, never show again.
+  if (setup.complete && dismissed) return "";
+
+  const canInvite = ["owner", "manager"].includes((auth.user || {}).role);
+  const firstName = ((auth.user || {}).full_name || "").split(" ")[0];
+  const steps = [
+    { key: "has_customer", icon: "🏢", label: "Add your first customer",
+      hint: "The account whose equipment you service.", href: "#/customers", cta: "Add customer" },
+    { key: "has_equipment", icon: "⚙️", label: "Register a piece of equipment",
+      hint: "The asset you'll track repairs against.", href: "#/equipment", cta: "Add equipment" },
+    { key: "has_work_order", icon: "🔧", label: "Open a work order",
+      hint: "Track a repair from intake to ship &amp; invoice.", id: "obNewWo", cta: "New work order" },
+    { key: "has_team", icon: "👥", label: "Invite a teammate",
+      hint: canInvite ? "Bring in service writers and technicians." : "Ask an owner or manager to add staff.",
+      href: canInvite ? "#/team" : null, cta: "Invite teammate" },
+    { key: "has_template", icon: "📋", label: "Set up a spec or test template",
+      hint: "Standardize captured specs and pass/fail tests.", href: "#/templates", cta: "Configure templates" },
+  ];
+  const done = setup.done, total = setup.total;
+  const pct = Math.round((done / total) * 100);
+
+  const rows = steps.map((s) => {
+    const ok = !!setup[s.key];
+    const mark = ok
+      ? '<span aria-hidden="true" style="color:var(--ok,#16a34a);font-size:1.15rem;line-height:1">✓</span>'
+      : `<span aria-hidden="true" style="font-size:1.15rem;line-height:1">${s.icon}</span>`;
+    let action = "";
+    if (!ok) {
+      if (s.id) action = `<button class="btn btn-primary btn-sm" id="${s.id}">${s.cta} →</button>`;
+      else if (s.href) action = `<a class="btn btn-ghost btn-sm" href="${s.href}">${s.cta} →</a>`;
+      else action = `<span class="muted" style="font-size:.8rem">${s.hint}</span>`;
+    }
+    return `<div class="spread" style="padding:9px 0;border-top:1px solid var(--line);gap:12px;${ok ? "opacity:.6" : ""}">
+      <div class="row" style="gap:10px;align-items:baseline;min-width:0">
+        <span style="width:1.4rem;text-align:center;flex:none">${mark}</span>
+        <div style="min-width:0">
+          <div style="${ok ? "text-decoration:line-through" : "font-weight:600"}">${s.label}</div>
+          ${ok ? "" : `<div class="muted" style="font-size:.8rem">${s.hint}</div>`}
+        </div>
+      </div>
+      <div style="flex:none">${action}</div>
+    </div>`;
+  }).join("");
+
+  const header = setup.complete
+    ? `<h2 style="margin-bottom:4px">🎉 You're all set${firstName ? ", " + esc(firstName) : ""}!</h2>
+       <p class="muted" style="margin-bottom:14px">Your shop is fully configured. Here's your operational dashboard.</p>`
+    : `<div class="spread" style="align-items:flex-start;margin-bottom:4px">
+         <h2 style="margin-bottom:0">👋 Get your shop running${firstName ? ", " + esc(firstName) : ""}</h2>
+         <span class="muted" style="font-size:.85rem;white-space:nowrap">${done} of ${total} done</span>
+       </div>
+       <p class="muted" style="margin-bottom:14px">A few steps to get the most out of Serviceflow.</p>`;
+
+  const bar = `<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin-bottom:6px">
+      <div style="height:100%;width:${pct}%;background:var(--brand-500);transition:width .3s"></div></div>`;
+
+  // Owner/manager can seed a demo customer+equipment+work order to explore,
+  // and remove it just as easily. Others don't see these controls.
+  const sampleControls = canInvite
+    ? (setup.has_sample
+        ? `<button class="btn btn-ghost btn-sm" id="obRemoveSample">🧹 Remove sample data</button>`
+        : `<button class="btn btn-ghost btn-sm" id="obLoadSample">✨ Load sample data to explore</button>`)
+    : "";
+
+  const footer = setup.complete
+    ? `<div class="spread" style="margin-top:14px;gap:10px">
+         <span>${sampleControls}</span>
+         <button class="btn btn-primary btn-sm" id="obDismiss">Got it, hide this</button></div>`
+    : (sampleControls
+        ? `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px" class="spread">
+             <span class="muted" style="font-size:.83rem">Not ready to add real data yet?</span>
+             ${sampleControls}</div>`
+        : "");
+
+  return `<div class="card" id="setupChecklist" style="margin-bottom:22px;border-color:var(--brand-400)">
+      <div class="card-body">
+        ${header}
+        ${bar}
+        <div>${rows}</div>
+        ${footer}
+      </div></div>`;
+}
+
+async function loadSampleData(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+  try {
+    await api.loadSampleData();
+    toast("Sample data loaded — explore away!", "ok");
+    customersCache = null;
+    renderDashboard();
+  } catch (e) {
+    toast(e.message, "err");
+    if (btn) { btn.disabled = false; btn.textContent = "✨ Load sample data to explore"; }
+  }
+}
+
+async function removeSampleData(btn) {
+  if (!confirm("Remove the sample customer and its demo equipment and work order?")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Removing…"; }
+  try {
+    await api.removeSampleData();
+    toast("Sample data removed", "ok");
+    customersCache = null;
+    renderDashboard();
+  } catch (e) {
+    toast(e.message, "err");
+    if (btn) { btn.disabled = false; btn.textContent = "🧹 Remove sample data"; }
+  }
 }
 
 /* ---------- work orders list ---------- */
@@ -245,6 +342,23 @@ function woRow(w) {
     <td>${prioBadge(w.priority)}</td></tr>`;
 }
 function emptyRow(cols) { return `<tr><td colspan="${cols}" class="muted" style="text-align:center;padding:24px">No records.</td></tr>`; }
+
+// Friendly empty-state for a page with no records yet. `cta` is optional:
+// {id} wires a click handler after render, or {href} links to another route.
+function emptyState({ icon = "📭", title, body = "", cta = null } = {}) {
+  let action = "";
+  if (cta) {
+    action = cta.id
+      ? `<button class="btn btn-primary btn-sm" id="${cta.id}" style="margin-top:14px">${cta.label} →</button>`
+      : `<a class="btn btn-primary btn-sm" href="${cta.href}" style="margin-top:14px">${cta.label} →</a>`;
+  }
+  return `<div class="empty">
+      <div class="big">${icon}</div>
+      <div style="font-weight:600;font-size:1.05rem;margin-bottom:4px">${title}</div>
+      ${body ? `<div class="muted" style="max-width:420px;margin:0 auto">${body}</div>` : ""}
+      ${action}
+    </div>`;
+}
 
 async function renderWorkOrders(params = {}, title = "Work Orders") {
   loading();
@@ -261,13 +375,9 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
         style="${mine ? "border-color:var(--brand-500);color:var(--brand-700)" : ""}">
         ${mine ? "✓ " : ""}👤 Assigned to me</button>
     </div>`;
-  view.innerHTML = `
-    <div class="page-title"><h1>${title}</h1>
-      <div class="row">
-        <button class="btn btn-ghost btn-sm" id="exportWo">⬇ Export CSV</button>
-        <button class="btn btn-primary btn-sm" id="pgNew">+ New Work Order</button></div></div>
-    ${title === "Work Orders" ? filterBar : ""}
-    <div class="card"><div class="table-wrap"><table class="data">
+  // Distinguish "no jobs at all yet" (new shop) from "no matches for this filter".
+  const isFiltered = !!(params.status || params.assigned_to);
+  const tableBody = `<div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>WO #</th><th>Equipment</th><th>Title</th><th>Type</th><th>Status</th><th>Priority</th><th>SLA</th><th>Promised</th></tr></thead>
       <tbody>${list.map((w) => `<tr data-wo="${w.id}">
         <td class="mono nowrap">${esc(w.number)}</td>
@@ -279,6 +389,21 @@ async function renderWorkOrders(params = {}, title = "Work Orders") {
         <td class="nowrap">${slaBadge(w) || '<span class="muted">—</span>'}</td>
         <td class="nowrap muted">${fmtDate(w.promised_date)}</td></tr>`).join("") || emptyRow(8)}
       </tbody></table></div></div>`;
+  const body = (!list.length && !isFiltered)
+    ? `<div class="card"><div class="card-body">${emptyState({
+        icon: "🔧", title: "No work orders yet",
+        body: "A work order tracks one repair from intake through inspection, quote, repair, testing and shipment — with its own invoice and history.",
+        cta: { id: "emptyNewWo", label: "Open your first work order" },
+      })}</div></div>`
+    : tableBody;
+  view.innerHTML = `
+    <div class="page-title"><h1>${title}</h1>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="exportWo">⬇ Export CSV</button>
+        <button class="btn btn-primary btn-sm" id="pgNew">+ New Work Order</button></div></div>
+    ${title === "Work Orders" ? filterBar : ""}
+    ${body}`;
+  el("#emptyNewWo")?.addEventListener("click", openNewWorkOrder);
   el("#pgNew").addEventListener("click", openNewWorkOrder);
   el("#exportWo").addEventListener("click", () =>
     downloadAuthed("/api/work-orders/export.csv", "work-orders.csv").catch((e) => toast(e.message, "err")));
@@ -921,17 +1046,25 @@ async function openNewWorkOrder() {
 async function renderCustomers() {
   loading();
   const list = await api.customers();
-  view.innerHTML = `
-    <div class="page-title"><h1>Customers</h1>
-      <button class="btn btn-primary btn-sm" id="newCustomer">+ New customer</button></div>
-    <div class="card"><div class="table-wrap"><table class="data">
+  const body = list.length
+    ? `<div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>Account</th><th>Name</th><th>Contact</th><th>Phone</th></tr></thead>
       <tbody>${list.map((c) => `<tr data-cust="${c.id}">
         <td class="mono">${esc(c.account_number)}</td><td><strong>${esc(c.name)}</strong></td>
         <td>${esc(c.contacts?.[0]?.name || "—")}<div class="muted" style="font-size:.82rem">${esc(c.contacts?.[0]?.title || "")}</div></td>
-        <td class="muted">${esc(c.phone || "—")}</td></tr>`).join("") || emptyRow(4)}
-      </tbody></table></div></div>`;
+        <td class="muted">${esc(c.phone || "—")}</td></tr>`).join("")}
+      </tbody></table></div></div>`
+    : `<div class="card"><div class="card-body">${emptyState({
+        icon: "🏢", title: "No customers yet",
+        body: "Add the company whose equipment you service. You'll attach their equipment and work orders to this account.",
+        cta: { id: "emptyNewCustomer", label: "Add your first customer" },
+      })}</div></div>`;
+  view.innerHTML = `
+    <div class="page-title"><h1>Customers</h1>
+      <button class="btn btn-primary btn-sm" id="newCustomer">+ New customer</button></div>
+    ${body}`;
   el("#newCustomer").addEventListener("click", openNewCustomer);
+  el("#emptyNewCustomer")?.addEventListener("click", openNewCustomer);
   els("tr[data-cust]", view).forEach((tr) =>
     tr.addEventListener("click", () => (location.hash = `#/customers/${tr.dataset.cust}`)));
 }
@@ -1106,10 +1239,20 @@ async function renderEquipment() {
   const list = await api.equipment(null, currentLocation || null);
   const cust = customersCache || (customersCache = await api.customers());
   const byId = Object.fromEntries(cust.map((c) => [c.id, c.name]));
-  view.innerHTML = `
-    <div class="page-title"><h1>Equipment</h1>
-      <button class="btn btn-primary btn-sm" id="newEquip">+ New equipment</button></div>
-    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
+  // Equipment must belong to a customer, so with none, send the user there first.
+  const empty = cust.length
+    ? emptyState({
+        icon: "⚙️", title: "No equipment yet",
+        body: "Register the assets you service — pumps, motors, valves. Each one carries its own repair history and spec sheet.",
+        cta: { id: "emptyNewEquip", label: "Add equipment" },
+      })
+    : emptyState({
+        icon: "🏢", title: "Add a customer first",
+        body: "Equipment belongs to a customer account. Create a customer, then come back to register their equipment.",
+        cta: { href: "#/customers", label: "Go to Customers" },
+      });
+  const body = list.length
+    ? `<div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(280px,1fr))">
       ${list.map((e) => `<div class="card card-pad" data-eqid="${e.id}" style="cursor:pointer">
         <div class="row" style="margin-bottom:8px"><span style="font-size:1.8rem">${TYPE_ICON[e.equipment_type]}</span>
           <div><strong>${esc(e.tag || TYPE_LABEL[e.equipment_type])}</strong>
@@ -1117,10 +1260,15 @@ async function renderEquipment() {
         <dl class="kv"><dt>Owner</dt><dd>${esc(byId[e.customer_id] || "—")}</dd>
           <dt>Make/Model</dt><dd>${esc(e.manufacturer || "—")} ${esc(e.model || "")}</dd>
           <dt>Serial</dt><dd class="mono" style="font-size:.82rem">${esc(e.serial_number || "—")}</dd>
-          <dt>Location</dt><dd>${esc(e.location || "—")}</dd></dl></div>`).join("") ||
-      '<div class="empty"><div class="big">⚙️</div>No equipment yet.</div>'}
-    </div>`;
+          <dt>Location</dt><dd>${esc(e.location || "—")}</dd></dl></div>`).join("")}
+    </div>`
+    : `<div class="card"><div class="card-body">${empty}</div></div>`;
+  view.innerHTML = `
+    <div class="page-title"><h1>Equipment</h1>
+      <button class="btn btn-primary btn-sm" id="newEquip">+ New equipment</button></div>
+    ${body}`;
   el("#newEquip").addEventListener("click", () => openNewEquipment());
+  el("#emptyNewEquip")?.addEventListener("click", () => openNewEquipment());
   els("[data-eqid]").forEach((c) => c.addEventListener("click", () => (location.hash = `#/equipment/${c.dataset.eqid}`)));
 }
 
@@ -1402,14 +1550,7 @@ async function renderInventory(lowOnly = false) {
   const list = await api.parts(lowOnly ? { low_stock: true } : {});
   partsCache = await api.parts();
   const lowCount = partsCache.filter((p) => p.quantity_on_hand <= p.reorder_point).length;
-  view.innerHTML = `
-    <div class="page-title"><h1>Inventory</h1>
-      <div class="row">
-        <button class="btn btn-ghost btn-sm ${lowOnly ? "" : ""}" id="lowToggle"
-          style="${lowOnly ? "border-color:var(--accent-500);color:var(--accent-600)" : ""}">⚠ Low stock (${lowCount})</button>
-        <button class="btn btn-primary btn-sm" id="addPart">+ Add part</button>
-      </div></div>
-    <div class="card"><div class="table-wrap"><table class="data">
+  const tableCard = `<div class="card"><div class="table-wrap"><table class="data">
       <thead><tr><th>SKU</th><th>Part</th><th>Location</th><th class="text-right">On hand</th><th class="text-right">Reorder</th><th class="text-right">Unit price</th><th></th></tr></thead>
       <tbody>${list.map((p) => {
         const low = p.quantity_on_hand <= p.reorder_point;
@@ -1424,10 +1565,27 @@ async function renderInventory(lowOnly = false) {
             <button class="btn btn-ghost btn-sm" data-adj="${p.id}" data-d="-1">−</button>
             <button class="btn btn-ghost btn-sm" data-adj="${p.id}" data-d="1">+</button>
             <button class="btn btn-ghost btn-sm" data-recv="${p.id}">Receive</button></td></tr>`;
-      }).join("") || '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No parts. Add your catalog.</td></tr>'}
+      }).join("") || '<tr><td colspan="7" class="muted" style="text-align:center;padding:24px">No low-stock parts. 🎉</td></tr>'}
       </tbody></table></div></div>`;
+  // Truly-empty catalog (not just an empty low-stock view) gets a friendly prompt.
+  const body = (!partsCache.length)
+    ? `<div class="card"><div class="card-body">${emptyState({
+        icon: "📦", title: "Your parts catalog is empty",
+        body: "Add the parts and consumables you stock. Serviceflow tracks on-hand quantities, flags low stock, and deducts parts as they're consumed on work orders.",
+        cta: { id: "emptyAddPart", label: "Add your first part" },
+      })}</div></div>`
+    : tableCard;
+  view.innerHTML = `
+    <div class="page-title"><h1>Inventory</h1>
+      <div class="row">
+        <button class="btn btn-ghost btn-sm" id="lowToggle"
+          style="${lowOnly ? "border-color:var(--accent-500);color:var(--accent-600)" : ""}">⚠ Low stock (${lowCount})</button>
+        <button class="btn btn-primary btn-sm" id="addPart">+ Add part</button>
+      </div></div>
+    ${body}`;
   els("tr[data-nostyle]").forEach((tr) => (tr.style.cursor = "default"));
   el("#addPart").addEventListener("click", openAddPart);
+  el("#emptyAddPart")?.addEventListener("click", openAddPart);
   el("#lowToggle").addEventListener("click", () => renderInventory(!lowOnly));
   els("[data-adj]").forEach((b) => b.addEventListener("click", async () => {
     try { await api.adjustStock(b.dataset.adj, +b.dataset.d); renderInventory(lowOnly); }

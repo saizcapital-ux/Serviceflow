@@ -57,6 +57,9 @@ export const api = {
   search: (q) => request(`/api/search?q=${encodeURIComponent(q)}`),
   // dashboard
   dashboard: (locationId) => request(`/api/dashboard${locationId ? `?location_id=${locationId}` : ""}`),
+  // onboarding sample data
+  loadSampleData: () => request("/api/onboarding/sample-data", { method: "POST" }),
+  removeSampleData: () => request("/api/onboarding/sample-data", { method: "DELETE" }),
   // locations
   locations: () => request("/api/locations"),
   createLocation: (b) => request("/api/locations", { method: "POST", body: b }),
