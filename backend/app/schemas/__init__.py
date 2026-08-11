@@ -686,6 +686,15 @@ class WorkOrderDetail(WorkOrderSummary):
 
 
 # ---------- Dashboard ----------
+class SampleDataResult(BaseModel):
+    """IDs of the demo records created/removed by the onboarding sample loader."""
+
+    customer_id: int
+    equipment_id: int | None = None
+    work_order_id: int | None = None
+    work_order_number: str | None = None
+
+
 class StatusCount(BaseModel):
     status: WorkOrderStatus
     count: int
@@ -699,6 +708,8 @@ class SetupProgress(BaseModel):
     has_work_order: bool
     has_team: bool
     has_template: bool
+    # Informational (not a milestone): whether the demo sample data is loaded.
+    has_sample: bool = False
 
     @computed_field
     @property

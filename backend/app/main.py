@@ -23,6 +23,7 @@ from app.api.routers import (
     invoices,
     locations,
     notifications,
+    onboarding,
     parts,
     portal,
     search,
@@ -133,6 +134,7 @@ app.include_router(checklists.router)
 app.include_router(invoices.router)
 app.include_router(attachments.router)
 app.include_router(notifications.router)
+app.include_router(onboarding.router)
 app.include_router(portal.router)
 
 

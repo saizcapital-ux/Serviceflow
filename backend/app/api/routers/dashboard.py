@@ -57,12 +57,22 @@ def dashboard(location_id: int | None = None, db: Session = Depends(get_db), use
             User.organization_id == org, User.customer_id.is_(None), User.is_active.is_(True)
         )
     ) or 0
+    from app.api.routers.onboarding import SAMPLE_ACCOUNT
+
+    has_sample = bool(
+        db.scalar(
+            select(func.count()).select_from(Customer).where(
+                Customer.organization_id == org, Customer.account_number == SAMPLE_ACCOUNT
+            )
+        )
+    )
     setup = SetupProgress(
         has_customer=org_exists(Customer),
         has_equipment=org_exists(Equipment),
         has_work_order=org_exists(WorkOrder),
         has_team=staff_count > 1,
         has_template=org_exists(TestTemplateItem) or org_exists(EquipmentSpecField),
+        has_sample=has_sample,
     )
 
     today = date.today()

@@ -211,6 +211,8 @@ async function renderDashboard() {
     localStorage.setItem("sf_setup_dismissed", "1");
     el("#setupChecklist")?.remove();
   });
+  el("#obLoadSample")?.addEventListener("click", (e) => loadSampleData(e.currentTarget));
+  el("#obRemoveSample")?.addEventListener("click", (e) => removeSampleData(e.currentTarget));
   wireWoRows();
   hydrateEquipment();
 }
@@ -276,17 +278,58 @@ function setupChecklist(setup) {
   const bar = `<div style="height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin-bottom:6px">
       <div style="height:100%;width:${pct}%;background:var(--brand-500);transition:width .3s"></div></div>`;
 
-  const dismiss = setup.complete
-    ? `<div style="margin-top:14px;text-align:right"><button class="btn btn-primary btn-sm" id="obDismiss">Got it, hide this</button></div>`
+  // Owner/manager can seed a demo customer+equipment+work order to explore,
+  // and remove it just as easily. Others don't see these controls.
+  const sampleControls = canInvite
+    ? (setup.has_sample
+        ? `<button class="btn btn-ghost btn-sm" id="obRemoveSample">🧹 Remove sample data</button>`
+        : `<button class="btn btn-ghost btn-sm" id="obLoadSample">✨ Load sample data to explore</button>`)
     : "";
+
+  const footer = setup.complete
+    ? `<div class="spread" style="margin-top:14px;gap:10px">
+         <span>${sampleControls}</span>
+         <button class="btn btn-primary btn-sm" id="obDismiss">Got it, hide this</button></div>`
+    : (sampleControls
+        ? `<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px" class="spread">
+             <span class="muted" style="font-size:.83rem">Not ready to add real data yet?</span>
+             ${sampleControls}</div>`
+        : "");
 
   return `<div class="card" id="setupChecklist" style="margin-bottom:22px;border-color:var(--brand-400)">
       <div class="card-body">
         ${header}
         ${bar}
         <div>${rows}</div>
-        ${dismiss}
+        ${footer}
       </div></div>`;
+}
+
+async function loadSampleData(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+  try {
+    await api.loadSampleData();
+    toast("Sample data loaded — explore away!", "ok");
+    customersCache = null;
+    renderDashboard();
+  } catch (e) {
+    toast(e.message, "err");
+    if (btn) { btn.disabled = false; btn.textContent = "✨ Load sample data to explore"; }
+  }
+}
+
+async function removeSampleData(btn) {
+  if (!confirm("Remove the sample customer and its demo equipment and work order?")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Removing…"; }
+  try {
+    await api.removeSampleData();
+    toast("Sample data removed", "ok");
+    customersCache = null;
+    renderDashboard();
+  } catch (e) {
+    toast(e.message, "err");
+    if (btn) { btn.disabled = false; btn.textContent = "🧹 Remove sample data"; }
+  }
 }
 
 /* ---------- work orders list ---------- */
