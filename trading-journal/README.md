@@ -21,14 +21,24 @@ It's a single static page (no build step, no server) driven by one data file.
 
 ## Features
 
-- **Equity curve** — cumulative realized P&L across every closed trade.
-- **Daily P&L** — net profit per trading day.
+- **Global filters** — slice the entire dashboard by symbol, asset type
+  (options / equity), and date range (All / YTD / 90d / 30d / MTD). Every
+  chart and stat recomputes.
+- **KPIs** — net P&L, win rate, expectancy, profit factor, avg win/loss,
+  **max drawdown**, **win/loss streaks**, best day, best & worst trade.
+- **Equity curve** — cumulative realized P&L with a running-peak line so
+  drawdowns are visible; hover for equity + drawdown at any trade.
+- **Daily P&L** bars and a **P&L calendar heatmap** (GitHub-style, green/red
+  by day).
+- **Edge by time of day** and **edge by weekday** — net P&L + win rate per
+  hour (ET) and per weekday, so you can see *when* you actually make money.
 - **"Where I took my trades"** — candlestick chart per symbol with a marker on
   the underlying price at each trade. Toggle **Intraday** for today's SPY fills
   on 5-minute bars at their exact times.
-- **KPIs** — net P&L, win rate, profit factor, avg win/loss, best day, best &
-  worst trade.
 - **P&L by symbol** and a **sortable, filterable trade log**.
+- **Tags & notes** — annotate any trade (A+ setup, FOMO, revenge, chop…) and
+  jot why you took it. Saved in your browser (localStorage), filterable, and
+  shown on the chart markers. **Export CSV** of the current view.
 - Light/dark theme, fully responsive.
 
 ## View it

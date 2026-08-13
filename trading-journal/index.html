@@ -23,6 +23,29 @@
       </div>
     </header>
 
+    <div class="filterbar" id="filterbar">
+      <div class="fgroup">
+        <span class="flabel">Symbol</span>
+        <select class="sel" id="fSymbol"></select>
+      </div>
+      <div class="fgroup" id="fKind">
+        <span class="flabel">Type</span>
+        <span class="chip active" data-k="all">All</span>
+        <span class="chip" data-k="option">Options</span>
+        <span class="chip" data-k="equity">Equity</span>
+      </div>
+      <div class="fgroup" id="fRange">
+        <span class="flabel">Range</span>
+        <span class="chip active" data-r="all">All</span>
+        <span class="chip" data-r="ytd">YTD</span>
+        <span class="chip" data-r="90">90d</span>
+        <span class="chip" data-r="30">30d</span>
+        <span class="chip" data-r="mtd">MTD</span>
+      </div>
+      <div class="spacer"></div>
+      <div class="count"><b id="fCount">—</b> of <span id="fTotal">—</span> trades · net <b id="fNet" class="mono">—</b></div>
+    </div>
+
     <section class="kpis" id="kpis"></section>
 
     <section class="card">
@@ -40,6 +63,37 @@
       </div>
       <div id="daily"></div>
     </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>P&amp;L calendar</h2>
+        <div class="cal-legend">
+          <span>loss</span>
+          <span class="box" style="background:var(--loss)"></span>
+          <span class="box" style="background:var(--surface-2)"></span>
+          <span class="box" style="background:var(--win)"></span>
+          <span>win</span>
+        </div>
+      </div>
+      <div id="calendar"></div>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>Edge by time of day</h2>
+          <span class="hint">net P&amp;L · win% below each hour (ET)</span>
+        </div>
+        <div id="timeofday"></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h2>Edge by weekday</h2>
+          <span class="hint">net P&amp;L · win% below each day</span>
+        </div>
+        <div id="dayofweek"></div>
+      </section>
+    </div>
 
     <section class="card">
       <div class="card-head">
@@ -90,9 +144,13 @@
           <span class="chip active" data-f="all">All</span>
           <span class="chip" data-f="win">Wins</span>
           <span class="chip" data-f="loss">Losses</span>
+          <span class="chip" data-f="tagged">Tagged</span>
         </div>
         <input class="search" id="logSearch" placeholder="Filter by symbol…" />
+        <div class="spacer" style="flex:1"></div>
+        <button class="btn" id="exportBtn">Export CSV</button>
       </div>
+      <p class="note" style="margin:-2px 0 10px">Add a <b>tag</b> and a <b>note</b> to any trade — saved in your browser, so your journal remembers your reasoning.</p>
       <div class="tbl-scroll">
         <table id="logTable">
           <thead>
@@ -104,6 +162,8 @@
               <th data-k="qty">Qty</th>
               <th data-k="price">Exec $</th>
               <th data-k="pnl">Realized P&amp;L</th>
+              <th class="sym">Tag</th>
+              <th class="sym">Note</th>
             </tr>
           </thead>
           <tbody id="logBody"></tbody>
