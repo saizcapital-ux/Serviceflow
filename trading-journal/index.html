@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trading Journal</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="brand">
+        <div class="logo">◪</div>
+        <div>
+          <h1>Trading Journal</h1>
+          <div class="sub">Robinhood · account <span id="hAccount">—</span> · auto-loaded fills</div>
+        </div>
+      </div>
+      <div class="top-meta">
+        <div><b id="hTrades">—</b> trades · <span id="hRange">—</span></div>
+        <div>synced <span id="hGen">—</span></div>
+        <button class="theme-btn" id="themeBtn">Toggle theme</button>
+      </div>
+    </header>
+
+    <section class="kpis" id="kpis"></section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Equity curve — cumulative realized P&amp;L</h2>
+        <span class="hint">every closed trade, in order · hover to inspect</span>
+      </div>
+      <div id="equity"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Daily P&amp;L</h2>
+        <span class="hint">net realized profit per trading day</span>
+      </div>
+      <div id="daily"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Where I took my trades</h2>
+        <div class="controls">
+          <select class="sel" id="symSel"></select>
+          <button class="chip" id="intradayBtn">Intraday</button>
+        </div>
+      </div>
+      <div class="hint" id="symTitle" style="margin-bottom:8px"></div>
+      <div id="symChart"></div>
+      <div class="legend">
+        <span class="k"><svg width="14" height="14"><polygon points="7,2 1.7,11 12.3,11" fill="var(--win)"/></svg> Winning trade</span>
+        <span class="k"><svg width="14" height="14"><polygon points="7,12 1.7,3 12.3,3" fill="var(--loss)"/></svg> Losing trade</span>
+        <span class="k"><span class="swatch" style="background:var(--series-1);opacity:.55"></span> price candles (marker size ∝ P&amp;L)</span>
+        <span class="k tag" id="symMeta"></span>
+      </div>
+      <p class="note" style="margin-top:10px">Each marker is placed on the underlying's price where you opened/closed the position. Toggle <b>Intraday</b> to see today's SPY trades on 5-minute bars at their exact fill times.</p>
+    </section>
+
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head"><h2>P&amp;L by symbol</h2></div>
+        <div id="breakdown"></div>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>How it works</h2></div>
+        <p class="note" style="line-height:1.7">
+          This journal is wired straight into your Robinhood account. It pulls your realized
+          profit &amp; loss trade history and the underlying price series, then plots every
+          closed trade on the chart where it happened — green triangles for winners, red for
+          losers, sized by dollar impact.
+        </p>
+        <p class="note" style="line-height:1.7">
+          To refresh with your latest fills, run <code>python import_robinhood.py</code>
+          (see the README). It regenerates <code>data.js</code> and the whole journal updates.
+        </p>
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Trade log</h2>
+        <span class="hint" id="logCount"></span>
+      </div>
+      <div class="table-tools">
+        <div class="controls" id="logFilter">
+          <span class="chip active" data-f="all">All</span>
+          <span class="chip" data-f="win">Wins</span>
+          <span class="chip" data-f="loss">Losses</span>
+        </div>
+        <input class="search" id="logSearch" placeholder="Filter by symbol…" />
+      </div>
+      <div class="tbl-scroll">
+        <table id="logTable">
+          <thead>
+            <tr>
+              <th class="sym" data-k="t">Date ▾</th>
+              <th data-k="t">Time</th>
+              <th class="sym" data-k="symbol">Symbol</th>
+              <th data-k="kind">Type</th>
+              <th data-k="qty">Qty</th>
+              <th data-k="price">Exec $</th>
+              <th data-k="pnl">Realized P&amp;L</th>
+            </tr>
+          </thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="footer">
+      Data pulled live from Robinhood · figures are informational, not tax or investment advice.<br>
+      Built as a personal trading journal · <span id="hRange2"></span>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
