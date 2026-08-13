@@ -672,6 +672,95 @@
     $("#fTotal").textContent = ALL.length;
   }
 
+  /* ---------------- AI Coach ---------------- */
+  function renderCoach() {
+    const C = window.COACH;
+    const card = $("#coachCard");
+    if (!C) { if (card) card.classList.add("hidden"); return; }
+    $("#coachGrade").textContent = C.grade || "—";
+    $("#coachVerdict").innerHTML = C.verdict || "";
+    const leaks = $("#coachLeaks"); leaks.innerHTML = "";
+    (C.leaks || []).forEach((l, i) => leaks.append(el("div", { class: "coach-item" }, [
+      el("div", { class: "n leak" }, String(i + 1)),
+      el("div", { class: "b", html: `<b>${l.title}.</b> ${l.html}` }),
+    ])));
+    const plan = $("#coachPlan"); plan.innerHTML = "";
+    (C.plan || []).forEach((p, i) => plan.append(el("div", { class: "coach-item" }, [
+      el("div", { class: "n win" }, String(i + 1)),
+      el("div", { class: "b", html: `<b>${p.title}.</b> ${p.html}` }),
+    ])));
+    $("#coachNote").textContent = (C.note || "") + (C.generatedAt ? `  ·  generated ${C.generatedAt}` : "");
+  }
+
+  /* ---------------- Playbook simulator ---------------- */
+  const RULES = [
+    { id: "midday", label: "Skip midday (12–1pm ET)", sub: "your worst hour by far", test: t => !(etHour(t.t) === 12 || etHour(t.t) === 13) },
+    { id: "late", label: "Skip Thursday & Friday", sub: "net-negative weekdays", test: t => !(etDow(t.t) === "Thu" || etDow(t.t) === "Fri") },
+    { id: "postloss", label: "No trade after a loss", sub: "one-trade cool-off", test: (t, i, arr) => !(i > 0 && arr[i - 1].pnl < 0) },
+    { id: "cap3", label: "Cap size at 3 contracts", sub: "scale bigger trades down to 3", scale: t => t.qty > 3 ? 3 / t.qty : 1 },
+  ];
+  const simState = {};
+  RULES.forEach(r => simState[r.id] = false);
+  function simulate() {
+    const kept = [];
+    ALL.forEach((t, i) => {
+      for (const r of RULES) { if (r.test && simState[r.id] && !r.test(t, i, ALL)) return; }
+      let pnl = t.pnl;
+      for (const r of RULES) { if (r.scale && simState[r.id]) pnl *= r.scale(t); }
+      kept.push({ t: t.t, pnl });
+    });
+    const net = kept.reduce((s, x) => s + x.pnl, 0);
+    const wins = kept.filter(x => x.pnl > 0).length;
+    return { kept, net, n: kept.length, wr: kept.length ? wins / kept.length : 0 };
+  }
+  function renderSimToggles() {
+    const host = $("#simToggles"); host.innerHTML = "";
+    RULES.forEach(r => {
+      host.append(el("div", { class: "sim-tog" + (simState[r.id] ? " on" : ""), onclick: () => { simState[r.id] = !simState[r.id]; renderSim(); } }, [
+        el("div", { class: "box" }, simState[r.id] ? "✓" : ""),
+        el("div", { class: "lab", html: `${r.label}<small>${r.sub}</small>` }),
+      ]));
+    });
+    host.append(el("div", { class: "sim-tog", style: "justify-content:center;border-style:dashed", onclick: () => { RULES.forEach(r => simState[r.id] = false); renderSimToggles(); renderSim(); } }, [el("div", { class: "lab", style: "color:var(--muted)" }, "Reset")]));
+  }
+  function renderSim() {
+    document.querySelectorAll("#simToggles .sim-tog").forEach((n, idx) => { const r = RULES[idx]; if (!r) return; n.classList.toggle("on", simState[r.id]); const b = n.querySelector(".box"); if (b) b.textContent = simState[r.id] ? "✓" : ""; });
+    const base = ALL.reduce((s, t) => s + t.pnl, 0);
+    const r = simulate();
+    const dNet = r.net - base;
+    const res = $("#simResult"); res.innerHTML = "";
+    const tiles = [
+      { l: "Net P&L", v: moneyS(r.net), vc: cls(r.net), d: `${moneyS(dNet)} vs actual`, dc: cls(dNet) },
+      { l: "Win rate", v: pct(r.wr), d: `${r.kept.filter(x => x.pnl > 0).length}W / ${r.kept.filter(x => x.pnl < 0).length}L`, dc: "tag" },
+      { l: "Trades kept", v: r.n.toLocaleString(), d: `of ${ALL.length}`, dc: "tag" },
+    ];
+    tiles.forEach(t => res.append(el("div", { class: "sim-stat" }, [
+      el("div", { class: "l" }, t.l),
+      el("div", { class: "v " + (t.vc || "") }, t.v),
+      el("div", { class: "d " + (t.dc || "tag") }, t.d),
+    ])));
+    const host = $("#simEquity"); host.innerHTML = "";
+    const W = 460, H = 150, P = { t: 10, r: 8, b: 8, l: 46 };
+    const iw = W - P.l - P.r, ih = H - P.t - P.b;
+    let cum = 0; const pts = r.kept.map((x, i) => { cum += x.pnl; return { i, cum }; });
+    let bc = 0; const basePts = ALL.map((t, i) => { bc += t.pnl; return { i, cum: bc }; });
+    const all = pts.concat(basePts);
+    const hi = Math.max(0, ...all.map(p => p.cum)), lo = Math.min(0, ...all.map(p => p.cum));
+    const pad = (hi - lo) * 0.08 || 1, yhi = hi + pad, ylo = lo - pad;
+    const X = (i, n) => P.l + (n <= 1 ? 0 : i / (n - 1) * iw);
+    const Y = v => P.t + (yhi - v) / (yhi - ylo) * ih;
+    const svg = svgEl("svg", { class: "chart-svg", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" }); svg.style.height = "150px";
+    if (ylo < 0 && yhi > 0) svg.append(svgEl("line", { class: "zero-line", x1: P.l, x2: W - P.r, y1: Y(0), y2: Y(0) }));
+    [yhi, ylo].forEach(v => { const lab = svgEl("text", { class: "axis-txt", x: P.l - 6, y: Y(v) + 3, "text-anchor": "end" }); lab.textContent = money0(v); svg.append(lab); });
+    if (basePts.length) svg.append(svgEl("path", { d: basePts.map((p, i) => (i ? "L" : "M") + X(p.i, basePts.length).toFixed(1) + " " + Y(p.cum).toFixed(1)).join(" "), fill: "none", stroke: "var(--muted)", "stroke-width": 1.2, "stroke-dasharray": "3 3", opacity: 0.8 }));
+    if (pts.length) svg.append(svgEl("path", { d: pts.map((p, i) => (i ? "L" : "M") + X(p.i, pts.length).toFixed(1) + " " + Y(p.cum).toFixed(1)).join(" "), fill: "none", stroke: r.net >= 0 ? "var(--win)" : "var(--loss)", "stroke-width": 2 }));
+    host.append(svg);
+    const active = RULES.filter(x => simState[x.id]).length;
+    $("#simNote").innerHTML = active
+      ? `Dashed grey = your actual equity curve. Solid = your record with these rules applied to every trade. <b>${active} rule${active > 1 ? "s" : ""} on.</b>`
+      : "Toggle rules on the right to see what your realized P&L would have been under them. Grey dashed line is your actual curve.";
+  }
+
   /* ---------------- theme ---------------- */
   function wireTheme() {
     $("#themeBtn").onclick = () => {
@@ -679,6 +768,7 @@
       const dark = cur ? cur === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
       document.documentElement.setAttribute("data-theme", dark ? "light" : "dark");
       renderAll();
+      renderSim();
     };
   }
   function renderHeader() {
@@ -711,8 +801,11 @@
 
   /* ---------------- boot ---------------- */
   renderHeader();
+  renderCoach();
   renderFilterBar();
   renderSymbolControls();
+  renderSimToggles();
+  renderSim();
   wireLog();
   wireTheme();
   renderAll();

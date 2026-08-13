@@ -48,6 +48,26 @@
 
     <section class="kpis" id="kpis"></section>
 
+    <section class="coach-card" id="coachCard">
+      <div class="coach-head">
+        <div class="coach-badge">◆</div>
+        <h2>AI Coach</h2>
+        <span class="coach-grade">Assessment: <b id="coachGrade">—</b></span>
+      </div>
+      <div class="coach-verdict" id="coachVerdict"></div>
+      <div class="coach-cols">
+        <div class="coach-col">
+          <h3>Where you're losing money</h3>
+          <div id="coachLeaks"></div>
+        </div>
+        <div class="coach-col">
+          <h3>Your 30-day plan</h3>
+          <div id="coachPlan"></div>
+        </div>
+      </div>
+      <p class="coach-note" id="coachNote"></p>
+    </section>
+
     <section class="card" id="insightsCard">
       <div class="card-head">
         <h2>Insights</h2>
@@ -102,6 +122,21 @@
         <div id="dayofweek"></div>
       </section>
     </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Playbook simulator</h2>
+        <span class="hint">what your whole record would've been under these rules</span>
+      </div>
+      <div class="grid-2" style="align-items:start">
+        <div>
+          <div class="sim-result" id="simResult"></div>
+          <div id="simEquity"></div>
+          <p class="note" id="simNote" style="margin-top:10px"></p>
+        </div>
+        <div class="sim-toggles" id="simToggles"></div>
+      </div>
+    </section>
 
     <div class="grid-2">
       <section class="card">
@@ -199,6 +234,7 @@
   </div>
 
   <script src="data.js"></script>
+  <script src="coach.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
