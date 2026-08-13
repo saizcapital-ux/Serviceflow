@@ -48,6 +48,14 @@
 
     <section class="kpis" id="kpis"></section>
 
+    <section class="card" id="insightsCard">
+      <div class="card-head">
+        <h2>Insights</h2>
+        <span class="hint">auto-generated from the trades in view</span>
+      </div>
+      <div class="insights" id="insights"></div>
+    </section>
+
     <section class="card">
       <div class="card-head">
         <h2>Equity curve — cumulative realized P&amp;L</h2>
@@ -95,6 +103,23 @@
       </section>
     </div>
 
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
+          <h2>Trade P&amp;L distribution</h2>
+          <span class="hint">how your wins &amp; losses are sized</span>
+        </div>
+        <div id="distribution"></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h2>Edge by position size</h2>
+          <span class="hint">net P&amp;L · win% below each size</span>
+        </div>
+        <div id="sizing"></div>
+      </section>
+    </div>
+
     <section class="card">
       <div class="card-head">
         <h2>Where I took my trades</h2>
@@ -120,17 +145,11 @@
         <div id="breakdown"></div>
       </section>
       <section class="card">
-        <div class="card-head"><h2>How it works</h2></div>
-        <p class="note" style="line-height:1.7">
-          This journal is wired straight into your Robinhood account. It pulls your realized
-          profit &amp; loss trade history and the underlying price series, then plots every
-          closed trade on the chart where it happened — green triangles for winners, red for
-          losers, sized by dollar impact.
-        </p>
-        <p class="note" style="line-height:1.7">
-          To refresh with your latest fills, run <code>python import_robinhood.py</code>
-          (see the README). It regenerates <code>data.js</code> and the whole journal updates.
-        </p>
+        <div class="card-head">
+          <h2>Tag performance</h2>
+          <span class="hint">does your read match the result?</span>
+        </div>
+        <div id="tagperf"></div>
       </section>
     </div>
 
@@ -148,6 +167,8 @@
         </div>
         <input class="search" id="logSearch" placeholder="Filter by symbol…" />
         <div class="spacer" style="flex:1"></div>
+        <button class="btn" id="backupBtn">Backup notes</button>
+        <button class="btn" id="restoreBtn">Restore</button>
         <button class="btn" id="exportBtn">Export CSV</button>
       </div>
       <p class="note" style="margin:-2px 0 10px">Add a <b>tag</b> and a <b>note</b> to any trade — saved in your browser, so your journal remembers your reasoning.</p>

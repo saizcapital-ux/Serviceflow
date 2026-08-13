@@ -35,10 +35,18 @@ It's a single static page (no build step, no server) driven by one data file.
 - **"Where I took my trades"** — candlestick chart per symbol with a marker on
   the underlying price at each trade. Toggle **Intraday** for today's SPY fills
   on 5-minute bars at their exact times.
+- **Auto-generated insights** — plain-English, data-driven callouts: payoff
+  math vs your breakeven win rate, post-loss tilt, overtrading, best/worst
+  hour & weekday, and which symbols drain the account.
+- **Trade P&L distribution** and **edge by position size** — see how your wins
+  & losses are sized and whether trading bigger helps or hurts.
+- **Tag performance** — win rate + net P&L per tag, so you can tell whether
+  your "A+ setup" read actually pays.
 - **P&L by symbol** and a **sortable, filterable trade log**.
 - **Tags & notes** — annotate any trade (A+ setup, FOMO, revenge, chop…) and
   jot why you took it. Saved in your browser (localStorage), filterable, and
-  shown on the chart markers. **Export CSV** of the current view.
+  shown on the chart markers. **Backup / restore** annotations as JSON and
+  **export CSV** of the current view.
 - Light/dark theme, fully responsive.
 
 ## View it

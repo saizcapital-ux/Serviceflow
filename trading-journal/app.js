@@ -408,6 +408,155 @@
     });
   }
 
+  /* ---------------- Insights (auto-generated) ---------------- */
+  const hourLabel = h => (h > 12 ? h - 12 : h) + (h >= 12 ? "pm" : "am");
+  function computeInsights(list) {
+    const out = [];
+    if (list.length < 8) return out;
+    const s = computeStats(list);
+    // payoff / breakeven
+    const be = (s.avgWin - s.avgLoss) ? Math.abs(s.avgLoss) / (s.avgWin + Math.abs(s.avgLoss)) : 0;
+    out.push({
+      tone: s.winRate >= be ? "good" : "bad",
+      title: "Payoff math",
+      text: `Win rate <b>${pct(s.winRate)}</b> vs breakeven <b>${pct(be)}</b> — winners avg <b class="pos">${moneyS(s.avgWin)}</b>, losers <b class="neg">${moneyS(s.avgLoss)}</b>. You ${s.winRate >= be ? "clear" : "fall short of"} the line your own trade sizes require.`,
+    });
+    // post-loss tilt
+    let afterLoss = [], afterWin = [];
+    for (let i = 1; i < list.length; i++) { if (list[i - 1].pnl < 0) afterLoss.push(list[i].pnl); else if (list[i - 1].pnl > 0) afterWin.push(list[i].pnl); }
+    if (afterLoss.length >= 5 && afterWin.length >= 5) {
+      const al = afterLoss.reduce((a, b) => a + b, 0) / afterLoss.length;
+      const aw = afterWin.reduce((a, b) => a + b, 0) / afterWin.length;
+      out.push({
+        tone: al < aw - 2 ? "bad" : "good",
+        title: "Tilt check",
+        text: `After a loss your next trade averages <b class="${cls(al)}">${moneyS(al)}</b>, vs <b class="${cls(aw)}">${moneyS(aw)}</b> after a win. ${al < aw - 2 ? "Losses drag the trade that follows — a cool-off rule could help." : "You don't chase losses — good discipline."}`,
+      });
+    }
+    // overtrading
+    const days = {};
+    list.forEach(t => { (days[t.date] = days[t.date] || { n: 0, pnl: 0 }); days[t.date].n++; days[t.date].pnl += t.pnl; });
+    const dayArr = Object.values(days);
+    if (dayArr.length >= 6) {
+      const counts = dayArr.map(d => d.n).sort((a, b) => a - b);
+      const thresh = counts[Math.floor(counts.length * 0.75)];
+      const busy = dayArr.filter(d => d.n >= thresh), calm = dayArr.filter(d => d.n < thresh);
+      if (busy.length && calm.length && thresh > 1) {
+        const bAvg = busy.reduce((a, d) => a + d.pnl, 0) / busy.length;
+        const cAvg = calm.reduce((a, d) => a + d.pnl, 0) / calm.length;
+        out.push({
+          tone: bAvg < cAvg - 5 ? "bad" : "good",
+          title: "Overtrading",
+          text: `On busy days (<b>${thresh}+</b> trades) you average <b class="${cls(bAvg)}">${money0(bAvg)}</b>/day vs <b class="${cls(cAvg)}">${money0(cAvg)}</b> on lighter days. ${bAvg < cAvg - 5 ? "More trades, worse days — activity is hurting you." : "Volume isn't hurting your daily result."}`,
+        });
+      }
+    }
+    // best/worst hour
+    const hrs = bucket(list, t => etHour(t.t), [9, 10, 11, 12, 13, 14, 15], h => h).filter(x => true);
+    const hrRaw = [9, 10, 11, 12, 13, 14, 15].map(h => { const arr = list.filter(t => etHour(t.t) === h); return { h, pnl: arr.reduce((a, b) => a + b.pnl, 0), n: arr.length }; }).filter(x => x.n >= 4);
+    if (hrRaw.length >= 2) {
+      const best = hrRaw.reduce((m, x) => x.pnl > m.pnl ? x : m);
+      const worst = hrRaw.reduce((m, x) => x.pnl < m.pnl ? x : m);
+      out.push({ tone: "warn", title: "Time of day", text: `Best hour <b>${hourLabel(best.h)} ET</b> at <b class="pos">${money0(best.pnl)}</b>; worst <b>${hourLabel(worst.h)} ET</b> at <b class="neg">${money0(worst.pnl)}</b>. Trade the hours that pay you.` });
+    }
+    // weekday
+    const wdays = ["Mon", "Tue", "Wed", "Thu", "Fri"].map(k => { const arr = list.filter(t => etDow(t.t) === k); return { k, pnl: arr.reduce((a, b) => a + b.pnl, 0), n: arr.length }; }).filter(x => x.n >= 3);
+    if (wdays.length >= 2) {
+      const best = wdays.reduce((m, x) => x.pnl > m.pnl ? x : m);
+      const worst = wdays.reduce((m, x) => x.pnl < m.pnl ? x : m);
+      if (worst.pnl < 0) out.push({ tone: "warn", title: "Weekday", text: `<b>${worst.k}</b> is your weakest day (<b class="neg">${money0(worst.pnl)}</b>) while <b>${best.k}</b> leads (<b class="pos">${money0(best.pnl)}</b>).` });
+    }
+    // symbol drain
+    const bySym = {};
+    list.forEach(t => { (bySym[t.symbol] = bySym[t.symbol] || { pnl: 0, n: 0 }); bySym[t.symbol].pnl += t.pnl; bySym[t.symbol].n++; });
+    const symArr = Object.entries(bySym).map(([k, v]) => ({ k, ...v })).filter(x => x.n >= 3);
+    if (symArr.length >= 2) {
+      const best = symArr.reduce((m, x) => x.pnl > m.pnl ? x : m);
+      const worst = symArr.reduce((m, x) => x.pnl < m.pnl ? x : m);
+      if (worst.pnl < 0) out.push({ tone: worst.n >= 20 ? "bad" : "warn", title: "Symbol focus", text: `<b>${worst.k}</b> has cost you <b class="neg">${money0(worst.pnl)}</b> over ${worst.n} trades; <b>${best.k}</b> is your best at <b class="pos">${money0(best.pnl)}</b>.` });
+    }
+    return out.slice(0, 6);
+  }
+  function renderInsights(list) {
+    const host = $("#insights"); host.innerHTML = "";
+    const items = computeInsights(list);
+    if (!items.length) { host.append(el("p", { class: "empty" }, "Not enough trades in this view to surface patterns.")); return; }
+    const icon = { good: "▲", bad: "▼", warn: "◆" };
+    items.forEach(it => host.append(el("div", { class: "insight " + it.tone }, [
+      el("div", { class: "ic" }, icon[it.tone] || "•"),
+      el("div", {}, [el("div", { class: "t" }, it.title), el("div", { class: "d", html: it.text })]),
+    ])));
+  }
+
+  /* ---------------- Distribution histogram ---------------- */
+  function renderDistribution(list) {
+    const host = $("#distribution"); host.innerHTML = "";
+    if (!list.length) { host.append(el("p", { class: "empty" }, "No trades in this view.")); return; }
+    const bins = [
+      { lo: -Infinity, hi: -100, label: "≤-100", pos: false },
+      { lo: -100, hi: -50, label: "-100..-50", pos: false },
+      { lo: -50, hi: -25, label: "-50..-25", pos: false },
+      { lo: -25, hi: 0, label: "-25..0", pos: false },
+      { lo: 0, hi: 25, label: "0..25", pos: true },
+      { lo: 25, hi: 50, label: "25..50", pos: true },
+      { lo: 50, hi: 100, label: "50..100", pos: true },
+      { lo: 100, hi: Infinity, label: "≥100", pos: true },
+    ].map(b => ({ ...b, n: 0, sum: 0 }));
+    list.forEach(t => {
+      const v = t.pnl;
+      let b = v < 0 ? bins.find(x => v > x.lo && v <= x.hi) : bins.find(x => v >= x.lo && v < x.hi && x.pos);
+      if (!b) b = v >= 100 ? bins[7] : bins[0];
+      b.n++; b.sum += v;
+    });
+    const W = 440, H = 230, P = { t: 14, r: 8, b: 40, l: 34 };
+    const iw = W - P.l - P.r, ih = H - P.t - P.b;
+    const maxN = Math.max(...bins.map(b => b.n), 1);
+    const bw = iw / bins.length * 0.74;
+    const X = i => P.l + (i + 0.5) / bins.length * iw;
+    const Y = n => P.t + ih - n / maxN * ih;
+    const svg = svgEl("svg", { class: "chart-svg", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" }); svg.style.height = "230px";
+    svg.append(svgEl("line", { class: "grid-line", x1: P.l, x2: W - P.r, y1: P.t + ih, y2: P.t + ih }));
+    bins.forEach((b, i) => {
+      const h = (b.n / maxN) * ih, x = X(i) - bw / 2;
+      const rect = svgEl("rect", { x, y: P.t + ih - h, width: bw, height: Math.max(b.n ? 2 : 0, h), rx: 2, fill: b.pos ? "var(--win)" : "var(--loss)", opacity: b.n ? 0.9 : 0.25 });
+      rect.style.cursor = "pointer";
+      bindTT(rect, `<div class="h">$${b.label}</div><div class="r">Trades <b>${b.n}</b></div><div class="r">Total <b class="${cls(b.sum)}">${moneyS(b.sum)}</b></div>`);
+      svg.append(rect);
+      if (b.n) { const cl = svgEl("text", { class: "axis-txt", x: X(i), y: P.t + ih - h - 4, "text-anchor": "middle", style: "font-weight:600" }); cl.textContent = b.n; svg.append(cl); }
+      const lab = svgEl("text", { class: "axis-txt", x: X(i), y: H - 22, "text-anchor": "middle", style: "font-size:9.5px" }); lab.textContent = b.label; svg.append(lab);
+    });
+    const zx = P.l + iw / 2;
+    svg.append(svgEl("line", { x1: zx, x2: zx, y1: P.t, y2: P.t + ih, stroke: "var(--axis)", "stroke-dasharray": "3 3" }));
+    const zl = svgEl("text", { class: "axis-txt", x: zx, y: H - 8, "text-anchor": "middle" }); zl.textContent = "◄ losses  ·  wins ►"; svg.append(zl);
+    host.append(svg);
+  }
+
+  /* ---------------- Edge by position size ---------------- */
+  function sizeBucket(q) { if (q < 1) return "<1"; if (q <= 3) return String(Math.round(q)); if (q <= 5) return "4-5"; if (q <= 9) return "6-9"; return "10+"; }
+  function renderSizing(list) {
+    const order = ["<1", "1", "2", "3", "4-5", "6-9", "10+"];
+    const items = bucket(list, t => sizeBucket(t.qty), order, k => k);
+    renderGroupBars("#sizing", items);
+  }
+
+  /* ---------------- Tag performance ---------------- */
+  function renderTagPerf(list) {
+    const host = $("#tagperf"); host.innerHTML = "";
+    const m = new Map();
+    list.forEach(t => { const nt = notes[tradeId(t)]; if (!nt || !nt.tag) return; if (!m.has(nt.tag)) m.set(nt.tag, { pnl: 0, n: 0, w: 0 }); const o = m.get(nt.tag); o.pnl += t.pnl; o.n++; if (t.pnl > 0) o.w++; });
+    if (!m.size) { host.append(el("p", { class: "empty", style: "line-height:1.6" }, "Tag trades in the log below (A+ setup, FOMO, revenge…) and this shows which of your reads actually pay — win rate and net P&L per tag.")); return; }
+    host.append(el("div", { class: "tp-row head" }, [el("div", {}, "Tag"), el("div", { class: "r" }, "N"), el("div", { class: "r" }, "Win%"), el("div", { class: "r" }, "Net P&L")]));
+    [...m.entries()].sort((a, b) => b[1].pnl - a[1].pnl).forEach(([tag, o]) => {
+      const chip = el("span", { class: "tag-chip" }, tag); chip.style.background = "var(--surface-1)"; chip.style.color = (TAG_COLOR[tag] || "var(--text-secondary)"); chip.style.border = "1px solid var(--border)";
+      host.append(el("div", { class: "tp-row" }, [
+        el("div", {}, chip),
+        el("div", { class: "r mono" }, String(o.n)),
+        el("div", { class: "r mono" }, Math.round(o.w / o.n * 100) + "%"),
+        el("div", { class: "r mono " + cls(o.pnl) }, moneyS(o.pnl)),
+      ]));
+    });
+  }
+
   /* ---------------- Trade log ---------------- */
   let logSort = { key: "t", dir: -1 }, logFilter = "all", logSearch = "";
   function currentLogRows() {
@@ -451,6 +600,7 @@
     notes[id][field] = val;
     if (!notes[id].tag && !notes[id].note) delete notes[id];
     saveNotes();
+    if (field === "tag") renderTagPerf(getFiltered());
     if (logFilter === "tagged") renderLog();
   }
   function wireLog() {
@@ -462,6 +612,23 @@
     });
     $("#logSearch").oninput = e => { logSearch = e.target.value.trim(); renderLog(); };
     $("#exportBtn").onclick = exportCSV;
+    $("#backupBtn").onclick = () => {
+      if (!Object.keys(notes).length) { showModal("Backup notes", "{}", { note: "You haven't tagged or noted any trades yet." }); return; }
+      showModal(`Backup notes · ${Object.keys(notes).length} annotated trades`, JSON.stringify(notes, null, 2), { note: "Copy this JSON somewhere safe. Paste it into Restore on another device or after refreshing data." });
+    };
+    $("#restoreBtn").onclick = () => {
+      showModal("Restore notes", "", {
+        editable: true,
+        note: "Paste a previously backed-up notes JSON and Apply. It merges into your current annotations.",
+        onApply: txt => {
+          let obj; try { obj = JSON.parse(txt); } catch (e) { return "Invalid JSON — check and try again."; }
+          if (typeof obj !== "object" || !obj) return "That isn't a notes object.";
+          let added = 0; for (const k in obj) { notes[k] = obj[k]; added++; }
+          saveNotes(); renderLog(); renderTagPerf(getFiltered());
+          return true;
+        },
+      });
+    };
   }
   function exportCSV() {
     const rows = currentLogRows();
@@ -476,20 +643,22 @@
   }
 
   /* ---------------- modal ---------------- */
-  function showModal(title, text) {
-    const ta = el("textarea", { readonly: "" }); ta.value = text;
-    const bg = el("div", { class: "modal-bg", onclick: e => { if (e.target === bg) bg.remove(); } }, [
-      el("div", { class: "modal" }, [
-        el("h3", {}, title),
-        el("p", { class: "note", style: "margin-bottom:8px" }, "Downloads are blocked inside shared pages — select all and copy, or use the button."),
-        ta,
-        el("div", { class: "modal-actions" }, [
-          el("button", { class: "btn", onclick: () => bg.remove() }, "Close"),
-          el("button", { class: "btn primary", onclick: () => { ta.select(); try { navigator.clipboard.writeText(text); } catch (e) { document.execCommand("copy"); } } }, "Copy to clipboard"),
-        ]),
-      ]),
-    ]);
-    document.body.append(bg); ta.select();
+  function showModal(title, text, opts) {
+    opts = opts || {};
+    const ta = el("textarea", opts.editable ? {} : { readonly: "" }); ta.value = text;
+    if (opts.editable) ta.placeholder = "Paste JSON here…";
+    const msg = el("p", { class: "note", style: "margin-bottom:8px" }, opts.note || "Downloads are blocked inside shared pages — select all and copy, or use the button.");
+    const actions = el("div", { class: "modal-actions" }, [el("button", { class: "btn", onclick: () => bg.remove() }, "Close")]);
+    if (opts.editable && opts.onApply) {
+      actions.append(el("button", { class: "btn primary", onclick: () => {
+        const res = opts.onApply(ta.value.trim());
+        if (res === true) bg.remove(); else { msg.textContent = res || "Could not apply."; msg.style.color = "var(--loss)"; }
+      } }, "Apply"));
+    } else {
+      actions.append(el("button", { class: "btn primary", onclick: () => { ta.select(); try { navigator.clipboard.writeText(text); } catch (e) { document.execCommand("copy"); } } }, "Copy to clipboard"));
+    }
+    const bg = el("div", { class: "modal-bg", onclick: e => { if (e.target === bg) bg.remove(); } }, [el("div", { class: "modal" }, [el("h3", {}, title), msg, ta, actions])]);
+    document.body.append(bg); if (!opts.editable) ta.select();
   }
 
   /* ---------------- filter bar ---------------- */
@@ -526,13 +695,17 @@
     $("#fCount").textContent = list.length;
     const netEl = $("#fNet"); netEl.textContent = moneyS(net); netEl.className = "mono " + cls(net);
     renderKPIs(list);
+    renderInsights(list);
     renderEquity(list);
     renderDaily(list);
     renderCalendar(list);
     renderTimeOfDay(list);
     renderDayOfWeek(list);
+    renderDistribution(list);
+    renderSizing(list);
     renderSymbolChart();
     renderBreakdown(list);
+    renderTagPerf(list);
     renderLog();
   }
 
