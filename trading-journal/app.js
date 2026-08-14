@@ -672,6 +672,60 @@
     $("#fTotal").textContent = ALL.length;
   }
 
+  /* ---------------- Latest session recap ---------------- */
+  function renderSession() {
+    const card = $("#sessionCard");
+    if (!ALL.length) { if (card) card.classList.add("hidden"); return; }
+    const day = ALL[ALL.length - 1].date;
+    const trades = ALL.filter(t => t.date === day);
+    const net = trades.reduce((s, t) => s + t.pnl, 0);
+    const wins = trades.filter(t => t.pnl > 0), losses = trades.filter(t => t.pnl < 0);
+    const best = trades.reduce((m, t) => t.pnl > m.pnl ? t : m, trades[0]);
+    const worst = trades.reduce((m, t) => t.pnl < m.pnl ? t : m, trades[0]);
+    // context: average trading day
+    const dm = new Map(); ALL.forEach(t => dm.set(t.date, (dm.get(t.date) || 0) + t.pnl));
+    const days = [...dm.values()];
+    const avgDay = days.reduce((a, b) => a + b, 0) / days.length;
+    const rank = days.filter(v => v < net).length; // how many days were worse
+    const pctl = Math.round(rank / days.length * 100);
+    const dow = etDow(trades[0].t);
+    const syms = [...new Set(trades.map(t => t.symbol))];
+
+    $("#sessDate").textContent = `Latest session · ${fmtDateY(day)} (${dow})`;
+    const netEl = $("#sessNet"); netEl.textContent = moneyS(net); netEl.className = "sess-net " + cls(net);
+    $("#sessSub").textContent = `${trades.length} trade${trades.length !== 1 ? "s" : ""} · ${wins.length}W / ${losses.length}L · ${syms.join(", ")}`;
+
+    const stats = $("#sessStats"); stats.innerHTML = "";
+    const tiles = [
+      { l: "Win rate", v: pct(trades.length ? wins.length / trades.length : 0), s: `${wins.length} of ${trades.length}` },
+      { l: "Best trade", v: moneyS(best.pnl), vc: "pos", s: `${best.symbol} · ${fmtTime(best.t)}` },
+      { l: "Worst trade", v: moneyS(worst.pnl), vc: worst.pnl < 0 ? "neg" : "", s: `${worst.symbol} · ${fmtTime(worst.t)}` },
+      { l: "vs your avg day", v: moneyS(net - avgDay), vc: cls(net - avgDay), s: `avg ${moneyS(avgDay)}` },
+    ];
+    tiles.forEach(t => stats.append(el("div", { class: "sess-stat" }, [
+      el("div", { class: "l" }, t.l),
+      el("div", { class: "v " + (t.vc || "") }, t.v),
+      el("div", { class: "s" }, t.s),
+    ])));
+
+    // honest, non-preachy note tied to the playbook
+    const midday = trades.filter(t => etHour(t.t) === 12 || etHour(t.t) === 13);
+    const big = trades.filter(t => t.qty > 3);
+    let note;
+    if (net > 0) {
+      note = `A <b class="pos">${moneyS(net)}</b> day — better than ${pctl}% of your sessions. `;
+      if (big.length && big.reduce((s, t) => s + t.pnl, 0) > 0)
+        note += `Today's gains came largely from size (${big.length} trade${big.length > 1 ? "s" : ""} above 3 lots, net ${moneyS(big.reduce((s, t) => s + t.pnl, 0))}) — that works when you're right early, but the record still says oversizing is a coin-flip. `;
+      if (midday.length) note += `Note: ${midday.length} trade${midday.length > 1 ? "s were" : " was"} in the 12–1pm ET window your data usually punishes. `;
+      note += "Repeatable process beats a lucky size — bank the win and keep the rules.";
+    } else if (net < 0) {
+      note = `A <b class="neg">${moneyS(net)}</b> day. Log what setups you took while it's fresh — tag the trades below so the pattern shows up over time.`;
+    } else {
+      note = "A flat session — scratch days are fine. Keep the process tight.";
+    }
+    $("#sessNote").innerHTML = note;
+  }
+
   /* ---------------- AI Coach ---------------- */
   function renderCoach() {
     const C = window.COACH;
@@ -879,6 +933,7 @@
 
   /* ---------------- boot ---------------- */
   renderHeader();
+  renderSession();
   renderCoach();
   renderFilterBar();
   renderSymbolControls();

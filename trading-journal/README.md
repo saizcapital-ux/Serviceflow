@@ -37,6 +37,9 @@ It's a single static page (no build step, no server) driven by one data file.
 - **"Where I took my trades"** — candlestick chart per symbol with a marker on
   the underlying price at each trade. Toggle **Intraday** for today's SPY fills
   on 5-minute bars at their exact times.
+- **Latest session recap** — the first thing you see: your most recent
+  trading day's net P&L, win rate, best/worst trade, how it ranks against your
+  average day, and an honest note on whether it followed your playbook.
 - **AI Coach** — an AI-written assessment of your trading: a grade, a candid
   verdict, your biggest money-losing leaks, and a prioritized 30-day plan, all
   grounded in your own numbers. Regenerate it against fresh data with
