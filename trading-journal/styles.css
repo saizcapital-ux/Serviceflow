@@ -244,6 +244,33 @@ tbody tr:hover { background: var(--surface-2); }
 .sim-stat .v { font-size: 20px; font-weight: 700; margin-top: 3px; }
 .sim-stat .d { font-size: 11.5px; margin-top: 1px; }
 
+/* ---- discipline scorecard ---- */
+.disc-top { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.disc-ring { position: relative; width: 108px; height: 108px; flex: none; }
+.disc-ring .pct { position: absolute; inset: 0; display: grid; place-items: center; font-size: 26px; font-weight: 700; }
+.disc-lede { flex: 1 1 240px; }
+.disc-lede .grade { font-size: 15px; font-weight: 650; }
+.disc-lede p { font-size: 13px; color: var(--text-secondary); line-height: 1.55; margin: 4px 0 0; }
+.disc-rules { display: grid; gap: 10px; }
+.disc-rule { display: grid; grid-template-columns: 1fr 62px; gap: 10px 12px; align-items: center; }
+.disc-rule .rn { font-size: 13.5px; }
+.disc-rule .rn small { color: var(--muted); font-size: 11.5px; }
+.disc-rule .track { grid-column: 1 / -1; height: 8px; background: var(--surface-2); border-radius: 5px; overflow: hidden; margin-top: -4px; }
+.disc-rule .fill { height: 100%; border-radius: 5px; }
+.disc-rule .rp { text-align: right; font-variant-numeric: tabular-nums; font-weight: 650; font-size: 13.5px; }
+.disc-cost { margin-top: 12px; font-size: 13px; color: var(--text-secondary); padding: 10px 12px; background: var(--surface-2); border-radius: 10px; }
+.disc-cost b { font-variant-numeric: tabular-nums; }
+
+/* ---- monthly table ---- */
+.mon-row { display: grid; grid-template-columns: 78px 1fr 96px; gap: 10px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--grid); }
+.mon-row.head { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .03em; border-bottom: 1px solid var(--border); }
+.mon-row .mname { font-weight: 600; font-size: 13px; }
+.mon-row .mname small { color: var(--muted); font-weight: 400; }
+.mon-bar { height: 18px; position: relative; background: var(--surface-2); border-radius: 5px; }
+.mon-bar .z { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--axis); }
+.mon-bar .f { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; }
+.mon-row .mamt { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+
 /* ---- insights ---- */
 .insights { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
 .insight {

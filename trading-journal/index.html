@@ -141,6 +141,35 @@
     <div class="grid-2">
       <section class="card">
         <div class="card-head">
+          <h2>Discipline scorecard</h2>
+          <div class="controls" id="discWindow">
+            <span class="chip" data-w="20">Last 20</span>
+            <span class="chip active" data-w="50">Last 50</span>
+            <span class="chip" data-w="0">All</span>
+          </div>
+        </div>
+        <div class="disc-top">
+          <svg class="disc-ring" id="discRing" viewBox="0 0 108 108"></svg>
+          <div class="disc-lede">
+            <div class="grade" id="discGrade">—</div>
+            <p id="discLede"></p>
+          </div>
+        </div>
+        <div class="disc-rules" id="discRules"></div>
+        <div class="disc-cost" id="discCost"></div>
+      </section>
+      <section class="card">
+        <div class="card-head">
+          <h2>Monthly performance</h2>
+          <span class="hint">net realized P&amp;L by month</span>
+        </div>
+        <div id="monthly"></div>
+      </section>
+    </div>
+
+    <div class="grid-2">
+      <section class="card">
+        <div class="card-head">
           <h2>Trade P&amp;L distribution</h2>
           <span class="hint">how your wins &amp; losses are sized</span>
         </div>

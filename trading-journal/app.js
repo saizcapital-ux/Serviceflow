@@ -761,6 +761,84 @@
       : "Toggle rules on the right to see what your realized P&L would have been under them. Grey dashed line is your actual curve.";
   }
 
+  /* ---------------- Discipline scorecard ---------------- */
+  let discWin = 50;
+  const DISC_RULES = [
+    { id: "midday", label: "Avoided the 12–1pm ET chop", sub: "no midday entries", ok: t => !(etHour(t.t) === 12 || etHour(t.t) === 13) },
+    { id: "size", label: "Kept size ≤ 3 contracts", sub: "no oversized bets", ok: t => t.qty <= 3 },
+    { id: "postloss", label: "No revenge trade after a loss", sub: "one-trade cool-off", ok: (t, i, arr) => !(i > 0 && arr[i - 1].pnl < 0) },
+    { id: "week", label: "Stayed out Thursday & Friday", sub: "trade Mon–Wed", ok: t => !(etDow(t.t) === "Thu" || etDow(t.t) === "Fri") },
+  ];
+  function renderDiscipline() {
+    document.querySelectorAll("#discWindow .chip").forEach(c => c.classList.toggle("active", +c.dataset.w === discWin));
+    const win = discWin > 0 ? ALL.slice(-discWin) : ALL;
+    const offset = discWin > 0 ? Math.max(0, ALL.length - discWin) : 0;
+    const per = DISC_RULES.map(r => {
+      let ok = 0; const viol = [];
+      win.forEach((t, k) => { const gi = offset + k; if (r.ok(t, gi, ALL)) ok++; else viol.push(t); });
+      return { r, rate: win.length ? ok / win.length : 1, viol };
+    });
+    const overall = per.reduce((s, p) => s + p.rate, 0) / per.length;
+    // ring
+    const ring = $("#discRing"); ring.innerHTML = "";
+    const R = 46, C = 2 * Math.PI * R, col = overall >= 0.8 ? "var(--win)" : overall >= 0.6 ? "var(--series-1)" : "var(--loss)";
+    ring.append(svgEl("circle", { cx: 54, cy: 54, r: R, fill: "none", stroke: "var(--surface-2)", "stroke-width": 9 }));
+    ring.append(svgEl("circle", { cx: 54, cy: 54, r: R, fill: "none", stroke: col, "stroke-width": 9, "stroke-linecap": "round", "stroke-dasharray": `${(overall * C).toFixed(1)} ${C.toFixed(1)}`, transform: "rotate(-90 54 54)" }));
+    const t = svgEl("text", { x: 54, y: 61, "text-anchor": "middle", "font-size": "23", "font-weight": "700", fill: col }); t.textContent = Math.round(overall * 100) + "%"; ring.append(t);
+    const grade = overall >= 0.85 ? "Locked in" : overall >= 0.7 ? "Mostly disciplined" : overall >= 0.55 ? "Slipping" : "Off the rails";
+    $("#discGrade").textContent = grade;
+    const worst = per.slice().sort((a, b) => a.rate - b.rate)[0];
+    $("#discLede").textContent = win.length
+      ? `Across your last ${win.length} trades, you followed the playbook ${Math.round(overall * 100)}% of the time. ${worst.rate < 0.9 ? `Weakest habit: ${worst.r.label.toLowerCase()} (${Math.round(worst.rate * 100)}%).` : "Every rule above 90% — keep it up."}`
+      : "No trades in this window.";
+    const host = $("#discRules"); host.innerHTML = "";
+    per.forEach(p => {
+      const rate = p.rate, c = rate >= 0.9 ? "var(--win)" : rate >= 0.7 ? "var(--series-1)" : "var(--loss)";
+      const fill = el("div", { class: "fill" }); fill.style.width = (rate * 100) + "%"; fill.style.background = c;
+      host.append(el("div", { class: "disc-rule" }, [
+        el("div", { class: "rn", html: `${p.r.label}<small> · ${p.r.sub}</small>` }),
+        el("div", { class: "rp", style: `color:${c}` }, Math.round(rate * 100) + "%"),
+        el("div", { class: "track" }, fill),
+      ]));
+    });
+    // cost of violations (unique trades that broke ≥1 rule)
+    const violSet = new Map();
+    per.forEach(p => p.viol.forEach(t => violSet.set(tradeId(t), t)));
+    const violTrades = [...violSet.values()];
+    const violPnl = violTrades.reduce((s, t) => s + t.pnl, 0);
+    const winPnl = win.reduce((s, t) => s + t.pnl, 0);
+    $("#discCost").innerHTML = violTrades.length
+      ? `${violTrades.length} of ${win.length} trades broke at least one rule, for a combined <b class="${cls(violPnl)}">${moneyS(violPnl)}</b>. Following the playbook would have left this window at <b class="${cls(winPnl - violPnl)}">${moneyS(winPnl - violPnl)}</b> instead of <b class="${cls(winPnl)}">${moneyS(winPnl)}</b>.`
+      : `Perfect run — every trade in this window followed the playbook.`;
+  }
+
+  /* ---------------- Monthly performance ---------------- */
+  function renderMonthly() {
+    const m = new Map();
+    ALL.forEach(t => { const k = t.date.slice(0, 7); if (!m.has(k)) m.set(k, { pnl: 0, n: 0, w: 0 }); const o = m.get(k); o.pnl += t.pnl; o.n++; if (t.pnl > 0) o.w++; });
+    const rows = [...m.entries()].sort((a, b) => a[0] < b[0] ? 1 : -1);
+    const maxAbs = Math.max(...rows.map(r => Math.abs(r[1].pnl)), 1);
+    const host = $("#monthly"); host.innerHTML = "";
+    host.append(el("div", { class: "mon-row head" }, [el("div", {}, "Month"), el("div", {}, ""), el("div", { style: "text-align:right" }, "Net · win%")]));
+    rows.forEach(([k, o]) => {
+      const [y, mo] = k.split("-");
+      const name = new Date(Date.UTC(+y, +mo - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
+      const w = Math.abs(o.pnl) / maxAbs * 50; // half-width max
+      const f = el("div", { class: "f" });
+      f.style.background = o.pnl >= 0 ? "var(--win)" : "var(--loss)";
+      if (o.pnl >= 0) { f.style.left = "50%"; f.style.width = w + "%"; } else { f.style.right = "50%"; f.style.width = w + "%"; }
+      const bar = el("div", { class: "mon-bar" }, [el("div", { class: "z" }), f]);
+      host.append(el("div", { class: "mon-row" }, [
+        el("div", { class: "mname" }, [name, el("small", {}, ` · ${o.n}`)]),
+        bar,
+        el("div", { class: "mamt " + cls(o.pnl) }, `${moneyS(o.pnl)} · ${Math.round(o.w / o.n * 100)}%`),
+      ]));
+    });
+  }
+  function wireDiscipline() {
+    document.querySelectorAll("#discWindow .chip").forEach(c => c.onclick = () => { discWin = +c.dataset.w; renderDiscipline(); });
+  }
+
   /* ---------------- theme ---------------- */
   function wireTheme() {
     $("#themeBtn").onclick = () => {
@@ -806,6 +884,9 @@
   renderSymbolControls();
   renderSimToggles();
   renderSim();
+  wireDiscipline();
+  renderDiscipline();
+  renderMonthly();
   wireLog();
   wireTheme();
   renderAll();

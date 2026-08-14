@@ -44,6 +44,10 @@ It's a single static page (no build step, no server) driven by one data file.
 - **Playbook simulator** — toggle rules (skip midday, cap size, no post-loss
   trade, skip Thu/Fri) and instantly see what your *entire realized P&L* would
   have been under them, plotted against your actual equity curve.
+- **Discipline scorecard** — grades how well your recent trades (last 20 / 50 /
+  all) actually followed the playbook, per rule, and totals what the
+  rule-breaking trades cost you.
+- **Monthly performance** — net P&L, win rate, and trade count per month.
 - **Auto-generated insights** — plain-English, data-driven callouts: payoff
   math vs your breakeven win rate, post-loss tilt, overtrading, best/worst
   hour & weekday, and which symbols drain the account.
