@@ -685,6 +685,102 @@ class WorkOrderDetail(WorkOrderSummary):
     checklist_items: list[ChecklistItemOut] = []
 
 
+# ---------- Receivables (AR aging) ----------
+class ReceivablesCustomer(BaseModel):
+    customer_id: int
+    customer_name: str
+    total: float
+    current: float
+    d1_30: float
+    d31_60: float
+    d61_90: float
+    d90_plus: float
+    open_count: int
+    oldest_days: int
+
+
+class ReceivablesReport(BaseModel):
+    """Accounts-receivable aging: unpaid (issued) invoices bucketed by how far
+    past due they are, rolled up per customer and across the whole book."""
+
+    as_of: date
+    total_outstanding: float
+    current: float
+    d1_30: float
+    d31_60: float
+    d61_90: float
+    d90_plus: float
+    customers: list[ReceivablesCustomer]
+
+
+# ---------- Preventive maintenance ----------
+class MaintenancePlanCreate(BaseModel):
+    equipment_id: int
+    name: str = Field(min_length=1, max_length=200)
+    interval_days: int = Field(default=90, ge=1, le=3650)
+    service_type: ServiceType = ServiceType.field_service
+    priority: Priority = Priority.normal
+    instructions: str | None = None
+    # When the asset was last serviced. next_due_on is derived from this + the
+    # interval when omitted; if neither is given the plan is due today.
+    last_service_on: date | None = None
+    next_due_on: date | None = None
+
+
+class MaintenancePlanUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    interval_days: int | None = Field(default=None, ge=1, le=3650)
+    service_type: ServiceType | None = None
+    priority: Priority | None = None
+    instructions: str | None = None
+    next_due_on: date | None = None
+    is_active: bool | None = None
+
+
+class MaintenancePlanOut(ORMModel):
+    id: int
+    equipment_id: int
+    name: str
+    interval_days: int
+    service_type: ServiceType
+    priority: Priority
+    instructions: str | None = None
+    last_service_on: date | None = None
+    next_due_on: date
+    is_active: bool
+    created_at: datetime
+    # Denormalized context, populated by the router for display.
+    equipment_label: str | None = None
+    customer_id: int | None = None
+    customer_name: str | None = None
+
+    @computed_field
+    @property
+    def days_until_due(self) -> int:
+        return (self.next_due_on - date.today()).days
+
+    @computed_field
+    @property
+    def state(self) -> str:
+        """overdue | due_soon | ok — relative to today."""
+        d = self.days_until_due
+        if not self.is_active:
+            return "inactive"
+        if d < 0:
+            return "overdue"
+        if d <= 30:
+            return "due_soon"
+        return "ok"
+
+
+class MaintenanceGenerateResult(BaseModel):
+    """The work order created from a plan, plus the plan's new due date."""
+
+    work_order_id: int
+    work_order_number: str
+    next_due_on: date
+
+
 # ---------- Dashboard ----------
 class SampleDataResult(BaseModel):
     """IDs of the demo records created/removed by the onboarding sample loader."""
@@ -729,6 +825,15 @@ class SetupProgress(BaseModel):
         return self.done == self.total
 
 
+class MaintenanceSummary(BaseModel):
+    """Preventive-maintenance status for the dashboard: how many plans are
+    overdue or coming due soon, plus the nearest few for a quick glance."""
+
+    overdue: int = 0
+    due_soon: int = 0
+    upcoming: list[MaintenancePlanOut] = []
+
+
 class DashboardStats(BaseModel):
     open_work_orders: int
     rush_jobs: int
@@ -740,6 +845,7 @@ class DashboardStats(BaseModel):
     by_status: list[StatusCount]
     recent: list[WorkOrderSummary]
     setup: SetupProgress
+    maintenance: MaintenanceSummary = MaintenanceSummary()
 
 
 TokenResponse.model_rebuild()

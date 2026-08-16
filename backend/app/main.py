@@ -22,10 +22,12 @@ from app.api.routers import (
     invites,
     invoices,
     locations,
+    maintenance,
     notifications,
     onboarding,
     parts,
     portal,
+    receivables,
     search,
     spec_templates,
     tests as tests_router,
@@ -127,11 +129,13 @@ app.include_router(search.router)
 app.include_router(spec_templates.router)
 app.include_router(tests_router.router)
 app.include_router(locations.router)
+app.include_router(maintenance.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
 app.include_router(parts.router)
 app.include_router(checklists.router)
 app.include_router(invoices.router)
+app.include_router(receivables.router)
 app.include_router(attachments.router)
 app.include_router(notifications.router)
 app.include_router(onboarding.router)

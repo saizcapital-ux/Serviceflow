@@ -256,6 +256,11 @@ textarea { min-height: 88px; resize: vertical; }
 .nav-link:hover { background: rgba(255,255,255,.06); color:#fff; text-decoration:none; }
 .nav-link.active { background: var(--brand-600); color:#fff; }
 .nav-link .ic { width: 18px; text-align:center; opacity:.9; }
+.sidebar .nav-group {
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .07em;
+  color: #6b8199; font-weight: 700; padding: 13px 8px 3px;
+}
+.sidebar .nav-group:first-of-type { padding-top: 4px; }
 .sidebar .spacer { flex: 1; }
 .sidebar .who { border-top: 1px solid rgba(255,255,255,.1); padding-top: 12px; font-size:.85rem; color:#aebfd4; }
 .sidebar .who b { color:#fff; display:block; }
@@ -298,5 +303,6 @@ textarea { min-height: 88px; resize: vertical; }
   .shell { grid-template-columns: 1fr; }
   .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items:center; }
   .sidebar .brand { padding: 6px 8px; } .sidebar .spacer, .sidebar .who { display:none; }
+  .sidebar .nav-group { display:none; }
   .nav-link { padding: .45rem .6rem; }
 }
