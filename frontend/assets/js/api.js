@@ -92,6 +92,8 @@ export const api = {
   applyTests: (woId) => request(`/api/work-orders/${woId}/tests/apply`, { method: "POST" }),
   updateTestResult: (id, b) => request(`/api/test-results/${id}`, { method: "PATCH", body: b }),
   portalTests: (woId) => request(`/api/portal/work-orders/${woId}/tests`),
+  // receivables (AR aging)
+  receivables: () => request("/api/receivables"),
   // preventive maintenance
   maintenancePlans: (params = {}) => {
     const qs = new URLSearchParams(params).toString();

@@ -151,6 +151,7 @@ async function router() {
     if (route === "maintenance") return renderMaintenance();
     if (route === "inventory") return renderInventory();
     if (route === "invoices") return renderInvoices();
+    if (route === "receivables") return renderReceivables();
     if (route === "notifications") return renderNotifications();
     if (route === "audit") return renderAudit();
     if (route === "team") return renderTeam();
@@ -467,6 +468,53 @@ async function openMaintenanceModal(plan) {
       m.close(); renderMaintenance();
     } catch (e) { toast(e.message, "err"); }
   };
+}
+
+/* ---------- receivables (AR aging) ---------- */
+async function renderReceivables() {
+  loading();
+  const r = await api.receivables();
+  const tile = (label, val, cls = "") =>
+    `<div class="stat ${cls}"><div class="stat-label">${label}</div>
+       <div class="stat-value" style="font-size:1.15rem">${money(val)}</div></div>`;
+
+  const rows = r.customers.map((c) => `<tr data-nostyle>
+      <td><strong>${esc(c.customer_name)}</strong>
+        <div class="muted" style="font-size:.8rem">${c.open_count} open · oldest ${c.oldest_days}d</div></td>
+      <td class="text-right">${c.current ? money(c.current) : "—"}</td>
+      <td class="text-right">${c.d1_30 ? money(c.d1_30) : "—"}</td>
+      <td class="text-right">${c.d31_60 ? money(c.d31_60) : "—"}</td>
+      <td class="text-right"${c.d61_90 ? ' style="color:var(--warn,#b45309)"' : ""}>${c.d61_90 ? money(c.d61_90) : "—"}</td>
+      <td class="text-right"${c.d90_plus ? ' style="color:var(--danger,#dc2626);font-weight:700"' : ""}>${c.d90_plus ? money(c.d90_plus) : "—"}</td>
+      <td class="text-right"><strong>${money(c.total)}</strong></td></tr>`).join("");
+
+  view.innerHTML = `
+    <div class="page-title"><h1>Receivables</h1>
+      <span class="muted">Outstanding customer invoices, aged as of ${fmtDate(r.as_of)}</span></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr));margin-bottom:20px">
+      ${tile("Total outstanding", r.total_outstanding, "accent")}
+      ${tile("Current", r.current, "ok")}
+      ${tile("1–30 days", r.d1_30)}
+      ${tile("31–60 days", r.d31_60)}
+      ${tile("61–90 days", r.d61_90, "warn")}
+      ${tile("90+ days", r.d90_plus, r.d90_plus ? "accent" : "")}
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>Aging by customer</h3>
+        <button class="btn btn-ghost btn-sm" id="arCsv" ${r.customers.length ? "" : "disabled"}>⬇ Export CSV</button></div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Customer</th><th class="text-right">Current</th><th class="text-right">1–30</th>
+          <th class="text-right">31–60</th><th class="text-right">61–90</th><th class="text-right">90+</th>
+          <th class="text-right">Total</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7" style="text-align:center;padding:26px">
+          <div style="font-size:1.6rem">💰</div>
+          <p style="font-weight:600;margin:6px 0 2px">Nothing outstanding</p>
+          <p class="muted" style="font-size:.85rem">Every issued invoice has been paid. Nice.</p></td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+
+  el("#arCsv").addEventListener("click", () =>
+    downloadAuthed("/api/receivables/report.csv", `receivables-${r.as_of}.csv`).catch((e) => toast(e.message, "err")));
 }
 
 async function loadSampleData(btn) {

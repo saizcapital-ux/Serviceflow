@@ -27,6 +27,7 @@ from app.api.routers import (
     onboarding,
     parts,
     portal,
+    receivables,
     search,
     spec_templates,
     tests as tests_router,
@@ -134,6 +135,7 @@ app.include_router(work_orders.router)
 app.include_router(parts.router)
 app.include_router(checklists.router)
 app.include_router(invoices.router)
+app.include_router(receivables.router)
 app.include_router(attachments.router)
 app.include_router(notifications.router)
 app.include_router(onboarding.router)

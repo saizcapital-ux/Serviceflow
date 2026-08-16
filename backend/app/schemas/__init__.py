@@ -685,6 +685,34 @@ class WorkOrderDetail(WorkOrderSummary):
     checklist_items: list[ChecklistItemOut] = []
 
 
+# ---------- Receivables (AR aging) ----------
+class ReceivablesCustomer(BaseModel):
+    customer_id: int
+    customer_name: str
+    total: float
+    current: float
+    d1_30: float
+    d31_60: float
+    d61_90: float
+    d90_plus: float
+    open_count: int
+    oldest_days: int
+
+
+class ReceivablesReport(BaseModel):
+    """Accounts-receivable aging: unpaid (issued) invoices bucketed by how far
+    past due they are, rolled up per customer and across the whole book."""
+
+    as_of: date
+    total_outstanding: float
+    current: float
+    d1_30: float
+    d31_60: float
+    d61_90: float
+    d90_plus: float
+    customers: list[ReceivablesCustomer]
+
+
 # ---------- Preventive maintenance ----------
 class MaintenancePlanCreate(BaseModel):
     equipment_id: int
