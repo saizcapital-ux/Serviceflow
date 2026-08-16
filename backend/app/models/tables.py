@@ -535,6 +535,37 @@ class EquipmentSpecField(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class MaintenancePlan(Base):
+    """A recurring preventive-maintenance schedule for a single asset.
+
+    When a plan comes due, staff generate a work order from it; that advances
+    `last_service_on` to today and pushes `next_due_on` out by `interval_days`,
+    so routine PM turns one-off repairs into recurring, scheduled service.
+
+    `service_type` and `priority` are stored as plain strings (matching the
+    ServiceType / Priority enum values) so migrations don't have to reuse the
+    existing Postgres enum types — the same convention as the spec/test
+    template tables.
+    """
+
+    __tablename__ = "maintenance_plans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), index=True)
+    equipment_id: Mapped[int] = mapped_column(ForeignKey("equipment.id"), index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    interval_days: Mapped[int] = mapped_column(Integer, default=90)
+    service_type: Mapped[str] = mapped_column(String(20), default=ServiceType.field_service.value)
+    priority: Mapped[str] = mapped_column(String(20), default=Priority.normal.value)
+    instructions: Mapped[str | None] = mapped_column(Text)
+    last_service_on: Mapped[date | None] = mapped_column(Date)
+    next_due_on: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    equipment: Mapped[Equipment] = relationship()
+
+
 class TestTemplateItem(Base):
     """A per-organization test/inspection item to run for an equipment type
     (e.g. Motor → "Insulation Resistance (Megger)" in MΩ). equipment_type is a

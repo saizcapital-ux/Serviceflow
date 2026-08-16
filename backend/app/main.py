@@ -22,6 +22,7 @@ from app.api.routers import (
     invites,
     invoices,
     locations,
+    maintenance,
     notifications,
     onboarding,
     parts,
@@ -127,6 +128,7 @@ app.include_router(search.router)
 app.include_router(spec_templates.router)
 app.include_router(tests_router.router)
 app.include_router(locations.router)
+app.include_router(maintenance.router)
 app.include_router(customers.router)
 app.include_router(work_orders.router)
 app.include_router(parts.router)

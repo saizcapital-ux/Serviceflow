@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import require_staff
 from app.core.database import get_db
@@ -11,6 +11,7 @@ from app.models import (
     Customer,
     Equipment,
     EquipmentSpecField,
+    MaintenancePlan,
     Priority,
     ServiceType,
     TestTemplateItem,
@@ -18,7 +19,14 @@ from app.models import (
     WorkOrder,
     WorkOrderStatus,
 )
-from app.schemas import DashboardStats, SetupProgress, StatusCount, WorkOrderSummary
+from app.api.routers.maintenance import DUE_SOON_DAYS, _to_out
+from app.schemas import (
+    DashboardStats,
+    MaintenanceSummary,
+    SetupProgress,
+    StatusCount,
+    WorkOrderSummary,
+)
 from app.services import sla, workflow
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -76,6 +84,37 @@ def dashboard(location_id: int | None = None, db: Session = Depends(get_db), use
     )
 
     today = date.today()
+
+    # Preventive-maintenance status is org-wide (not location-scoped), like setup.
+    def pm_count(*conditions) -> int:
+        return db.scalar(
+            select(func.count()).select_from(MaintenancePlan).where(
+                MaintenancePlan.organization_id == org,
+                MaintenancePlan.is_active.is_(True),
+                *conditions,
+            )
+        ) or 0
+
+    upcoming_plans = db.scalars(
+        select(MaintenancePlan)
+        .where(
+            MaintenancePlan.organization_id == org,
+            MaintenancePlan.is_active.is_(True),
+            MaintenancePlan.next_due_on <= today + timedelta(days=DUE_SOON_DAYS),
+        )
+        .options(selectinload(MaintenancePlan.equipment).selectinload(Equipment.customer))
+        .order_by(MaintenancePlan.next_due_on, MaintenancePlan.id)
+        .limit(5)
+    ).all()
+    maintenance = MaintenanceSummary(
+        overdue=pm_count(MaintenancePlan.next_due_on < today),
+        due_soon=pm_count(
+            MaintenancePlan.next_due_on >= today,
+            MaintenancePlan.next_due_on <= today + timedelta(days=DUE_SOON_DAYS),
+        ),
+        upcoming=[_to_out(p) for p in upcoming_plans],
+    )
+
     open_states = WorkOrder.status.in_(sla.OPEN_STATES)
     return DashboardStats(
         open_work_orders=count(WorkOrder.status.in_(workflow.OPEN_STATUSES)),
@@ -96,4 +135,5 @@ def dashboard(location_id: int | None = None, db: Session = Depends(get_db), use
         by_status=[StatusCount(status=s, count=c) for s, c in by_status_rows],
         recent=[WorkOrderSummary.model_validate(w) for w in recent],
         setup=setup,
+        maintenance=maintenance,
     )
