@@ -148,6 +148,7 @@ async function router() {
     if (route === "customers") return renderCustomers();
     if (route === "equipment" && id) return renderEquipmentDetail(id);
     if (route === "equipment") return renderEquipment();
+    if (route === "maintenance") return renderMaintenance();
     if (route === "inventory") return renderInventory();
     if (route === "invoices") return renderInvoices();
     if (route === "notifications") return renderNotifications();
@@ -205,7 +206,8 @@ async function renderDashboard() {
         <div class="card-head"><h3>Pipeline by status</h3></div>
         <div class="card-body">${funnel || '<p class="muted">No work orders yet.</p>'}</div>
       </div>
-    </div>`;
+    </div>
+    ${maintenanceWidget(d.maintenance)}`;
   el("#obNewWo")?.addEventListener("click", openNewWorkOrder);
   el("#obDismiss")?.addEventListener("click", () => {
     localStorage.setItem("sf_setup_dismissed", "1");
@@ -303,6 +305,168 @@ function setupChecklist(setup) {
         <div>${rows}</div>
         ${footer}
       </div></div>`;
+}
+
+/* ---------- preventive maintenance ---------- */
+const SERVICE_LABEL = { shop_repair: "Shop repair", field_service: "Field service" };
+
+// A due-state badge for a PM plan, reusing the work-order status badge palette.
+function pmBadge(plan) {
+  const d = plan.days_until_due;
+  if (plan.state === "inactive") return `<span class="badge status closed">Paused</span>`;
+  if (plan.state === "overdue") return `<span class="badge status cancelled">⚠ ${Math.abs(d)}d overdue</span>`;
+  if (plan.state === "due_soon") return `<span class="badge status on_hold">${d === 0 ? "Due today" : "Due in " + d + "d"}</span>`;
+  return `<span class="badge status ready">in ${d}d</span>`;
+}
+
+// Compact dashboard card summarizing PM that needs attention. Hidden when there
+// are no plans due within the window and none overdue.
+function maintenanceWidget(m) {
+  if (!m) return "";
+  if (!(m.overdue || 0) && !(m.due_soon || 0) && !(m.upcoming || []).length) return "";
+  const rows = (m.upcoming || []).map((p) => `<div class="spread" style="padding:7px 0;border-top:1px solid var(--line);gap:10px">
+      <div style="min-width:0">
+        <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</div>
+        <div class="muted" style="font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.equipment_label || "—")}${p.customer_name ? " · " + esc(p.customer_name) : ""}</div>
+      </div>
+      <span style="flex:none">${pmBadge(p)}</span></div>`).join("");
+  return `<div class="card" style="margin-top:22px">
+      <div class="card-head"><h3>🗓️ Maintenance due</h3><a href="#/maintenance">Manage →</a></div>
+      <div class="card-body">
+        <div class="row" style="gap:18px;margin-bottom:6px">
+          <span><strong style="color:var(--danger,#dc2626);font-size:1.25rem">${m.overdue || 0}</strong> <span class="muted">overdue</span></span>
+          <span><strong style="font-size:1.25rem">${m.due_soon || 0}</strong> <span class="muted">due soon</span></span>
+        </div>
+        ${rows || '<p class="muted">Nothing due in the next 30 days.</p>'}
+      </div></div>`;
+}
+
+let pmDueOnly = false;
+
+async function renderMaintenance() {
+  loading();
+  const plans = await api.maintenancePlans(pmDueOnly ? { due: true } : {});
+  const rows = plans.map((p) => `<tr data-nostyle>
+      <td><strong>${esc(p.equipment_label || "—")}</strong>${p.customer_name ? `<div class="muted" style="font-size:.82rem">${esc(p.customer_name)}</div>` : ""}</td>
+      <td>${esc(p.name)}${p.instructions ? `<div class="muted" style="font-size:.8rem;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.instructions)}</div>` : ""}</td>
+      <td class="muted">every ${p.interval_days}d</td>
+      <td style="white-space:nowrap">${fmtDate(p.next_due_on)} ${pmBadge(p)}</td>
+      <td class="text-right" style="white-space:nowrap">
+        <button class="btn btn-primary btn-sm" data-pm-gen="${p.id}">Generate WO</button>
+        <button class="btn btn-ghost btn-sm" data-pm-edit="${p.id}">Edit</button>
+        <button class="btn btn-danger btn-sm" data-pm-del="${p.id}">Remove</button></td></tr>`).join("");
+
+  const empty = `<tr><td colspan="5" style="text-align:center;padding:26px">
+      <div style="font-size:1.6rem">🗓️</div>
+      <p style="font-weight:600;margin:6px 0 2px">${pmDueOnly ? "Nothing due right now" : "No maintenance plans yet"}</p>
+      <p class="muted" style="font-size:.85rem;margin-bottom:12px">${pmDueOnly
+        ? "Every plan is on schedule — switch off the filter to see them all."
+        : "Set up a recurring schedule for an asset and generate work orders with one click when they come due."}</p>
+      ${pmDueOnly ? "" : '<button class="btn btn-primary btn-sm" id="pmEmptyNew">➕ New PM plan</button>'}
+    </td></tr>`;
+
+  view.innerHTML = `
+    <div class="page-title"><h1>Preventive Maintenance</h1>
+      <span class="muted">Recurring service schedules per asset</span></div>
+    <div class="card">
+      <div class="card-head">
+        <label class="row" style="gap:6px;align-items:center;margin:0;font-size:.85rem">
+          <input type="checkbox" id="pmDue" ${pmDueOnly ? "checked" : ""}/> Due soon &amp; overdue only</label>
+        <button class="btn btn-primary btn-sm" id="pmNew">➕ New PM plan</button>
+      </div>
+      <div class="table-wrap"><table class="data">
+        <thead><tr><th>Asset</th><th>Plan</th><th>Interval</th><th>Next due</th><th></th></tr></thead>
+        <tbody>${rows || empty}</tbody></table></div>
+    </div>`;
+
+  el("#pmDue").addEventListener("change", (e) => { pmDueOnly = e.target.checked; renderMaintenance(); });
+  el("#pmNew").addEventListener("click", () => openMaintenanceModal());
+  el("#pmEmptyNew")?.addEventListener("click", () => openMaintenanceModal());
+  els("[data-pm-gen]").forEach((b) => b.addEventListener("click", () => generatePm(b.dataset.pmGen)));
+  els("[data-pm-edit]").forEach((b) => b.addEventListener("click", () =>
+    openMaintenanceModal(plans.find((p) => String(p.id) === b.dataset.pmEdit))));
+  els("[data-pm-del]").forEach((b) => b.addEventListener("click", () => removePm(b.dataset.pmDel)));
+}
+
+async function generatePm(id) {
+  if (!confirm("Open a work order from this plan and advance its schedule by one interval?")) return;
+  try {
+    const r = await api.generateMaintenanceWo(id);
+    toast(`Created ${r.work_order_number}`, "ok");
+    location.hash = `#/workorders/${r.work_order_id}`;
+  } catch (e) { toast(e.message, "err"); }
+}
+
+async function removePm(id) {
+  if (!confirm("Remove this maintenance plan? Work orders already generated from it are kept.")) return;
+  try { await api.deleteMaintenancePlan(id); toast("Plan removed", "ok"); renderMaintenance(); }
+  catch (e) { toast(e.message, "err"); }
+}
+
+async function openMaintenanceModal(plan) {
+  const editing = !!plan;
+  let equipmentOptions = "";
+  if (!editing) {
+    const [custs, equip] = await Promise.all([api.customers(), api.equipment()]);
+    const cmap = {}; custs.forEach((c) => (cmap[c.id] = c.name));
+    if (!equip.length) return toast("Add equipment first — a PM plan is attached to an asset.", "err");
+    equipmentOptions = equip.map((e) => {
+      const lbl = e.tag || e.serial_number || [e.manufacturer, e.model].filter(Boolean).join(" ") || `Asset #${e.id}`;
+      return `<option value="${e.id}">${esc((cmap[e.customer_id] || "—") + " — " + lbl)}</option>`;
+    }).join("");
+  }
+  const svcSel = (sel) => `<select id="pmSvc">${Object.entries(SERVICE_LABEL)
+    .map(([v, l]) => `<option value="${v}" ${v === sel ? "selected" : ""}>${l}</option>`).join("")}</select>`;
+  const prioSel = (sel) => `<select id="pmPrio">${["low", "normal", "high", "rush"]
+    .map((v) => `<option value="${v}" ${v === sel ? "selected" : ""}>${v}</option>`).join("")}</select>`;
+
+  const m = modal(`<div class="card-head"><h3>${editing ? "Edit PM plan" : "New PM plan"}</h3></div>
+    <div class="card-body stack">
+      ${editing
+        ? `<div class="muted" style="font-size:.85rem">Asset: <strong>${esc(plan.equipment_label || "—")}</strong>${plan.customer_name ? " · " + esc(plan.customer_name) : ""}</div>`
+        : `<label class="field"><span>Asset</span><select id="pmEq">${equipmentOptions}</select></label>`}
+      <label class="field"><span>Plan name</span><input id="pmName" placeholder="e.g. Quarterly vibration + lube" value="${editing ? esc(plan.name) : ""}"/></label>
+      <div class="row" style="gap:8px">
+        <label class="field" style="max-width:130px"><span>Every (days)</span><input id="pmInterval" type="number" min="1" value="${editing ? plan.interval_days : 90}"/></label>
+        <label class="field grow"><span>Service type</span>${svcSel(editing ? plan.service_type : "field_service")}</label>
+        <label class="field" style="max-width:120px"><span>Priority</span>${prioSel(editing ? plan.priority : "normal")}</label>
+      </div>
+      <label class="field"><span>Next due${editing ? "" : " (optional — defaults to today)"}</span>
+        <input id="pmDueDate" type="date" value="${editing ? plan.next_due_on : ""}"/></label>
+      <label class="field"><span>Instructions (optional)</span>
+        <textarea id="pmInstr" rows="3" placeholder="What the technician should do…">${editing ? esc(plan.instructions || "") : ""}</textarea></label>
+      ${editing ? `<label class="row" style="gap:6px;align-items:center;margin:0"><input type="checkbox" id="pmActive" ${plan.is_active ? "checked" : ""}/> Active</label>` : ""}
+      <div class="row" style="justify-content:flex-end;gap:8px">
+        <button class="btn btn-ghost" id="pmCancel">Cancel</button>
+        <button class="btn btn-primary" id="pmSave">${editing ? "Save" : "Create plan"}</button>
+      </div></div>`);
+
+  el("#pmCancel", m.root).onclick = m.close;
+  el("#pmSave", m.root).onclick = async () => {
+    const name = el("#pmName", m.root).value.trim();
+    const interval = parseInt(el("#pmInterval", m.root).value, 10);
+    if (!name) return toast("Plan name is required", "err");
+    if (!interval || interval < 1) return toast("Interval must be at least 1 day", "err");
+    const body = {
+      name, interval_days: interval,
+      service_type: el("#pmSvc", m.root).value,
+      priority: el("#pmPrio", m.root).value,
+      instructions: el("#pmInstr", m.root).value.trim() || null,
+      next_due_on: el("#pmDueDate", m.root).value || null,
+    };
+    try {
+      if (editing) {
+        body.is_active = el("#pmActive", m.root).checked;
+        await api.updateMaintenancePlan(plan.id, body);
+        toast("Plan updated", "ok");
+      } else {
+        body.equipment_id = parseInt(el("#pmEq", m.root).value, 10);
+        await api.createMaintenancePlan(body);
+        toast("PM plan created", "ok");
+      }
+      m.close(); renderMaintenance();
+    } catch (e) { toast(e.message, "err"); }
+  };
 }
 
 async function loadSampleData(btn) {

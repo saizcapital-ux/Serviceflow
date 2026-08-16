@@ -92,6 +92,15 @@ export const api = {
   applyTests: (woId) => request(`/api/work-orders/${woId}/tests/apply`, { method: "POST" }),
   updateTestResult: (id, b) => request(`/api/test-results/${id}`, { method: "PATCH", body: b }),
   portalTests: (woId) => request(`/api/portal/work-orders/${woId}/tests`),
+  // preventive maintenance
+  maintenancePlans: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request(`/api/maintenance-plans${qs ? `?${qs}` : ""}`);
+  },
+  createMaintenancePlan: (b) => request("/api/maintenance-plans", { method: "POST", body: b }),
+  updateMaintenancePlan: (id, b) => request(`/api/maintenance-plans/${id}`, { method: "PATCH", body: b }),
+  deleteMaintenancePlan: (id) => request(`/api/maintenance-plans/${id}`, { method: "DELETE" }),
+  generateMaintenanceWo: (id) => request(`/api/maintenance-plans/${id}/generate`, { method: "POST" }),
   // work orders (staff)
   workOrders: (params = {}) => {
     const qs = new URLSearchParams(params).toString();
