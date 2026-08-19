@@ -227,44 +227,80 @@
     host.append(svg);
   }
 
-  /* ---------------- Calendar heatmap ---------------- */
+  /* ---------------- Monthly P&L calendar ---------------- */
+  let calCursor = null;               // year*12 + month(0-based) of the shown month
   function renderCalendar(list) {
     const host = $("#calendar"); host.innerHTML = "";
-    const days = dailyPnl(list);
-    if (!days.length) { host.append(el("p", { class: "empty" }, "No trades in this view.")); return; }
-    const pnlByDate = new Map(days.map(d => [d.date, d.pnl]));
-    const maxAbs = Math.max(...days.map(d => Math.abs(d.pnl))) || 1;
-    const parse = s => { const [y, m, d] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
-    let first = parse(days[0].date), last = parse(days[days.length - 1].date);
-    // back up to Monday
-    const startMon = new Date(first); const dow = (startMon.getUTCDay() + 6) % 7; startMon.setUTCDate(startMon.getUTCDate() - dow);
-    const cell = 15, gap = 4, top = 18, left = 30;
-    const weeks = Math.ceil((last - startMon) / (7 * 864e5)) + 1;
-    const W = left + weeks * (cell + gap) + 4, H = top + 5 * (cell + gap) + 6;
-    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, style: "max-width:100%" });
-    ["Mon", "Wed", "Fri"].forEach((lab, i) => { const t = svgEl("text", { class: "axis-txt", x: left - 6, y: top + (i * 2) * (cell + gap) + cell - 3, "text-anchor": "end" }); t.textContent = lab; svg.append(t); });
-    let lastMonth = -1;
-    for (let w = 0; w < weeks; w++) {
-      for (let d = 0; d < 5; d++) {
-        const day = new Date(startMon); day.setUTCDate(startMon.getUTCDate() + w * 7 + d);
-        if (day < first || day > last) continue;
-        const iso = day.toISOString().slice(0, 10);
-        const x = left + w * (cell + gap), y = top + d * (cell + gap);
-        // month label
-        if (day.getUTCMonth() !== lastMonth && d === 0) {
-          lastMonth = day.getUTCMonth();
-          const ml = svgEl("text", { class: "axis-txt", x, y: top - 6 }); ml.textContent = day.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }); svg.append(ml);
-        }
-        const has = pnlByDate.has(iso);
-        const pnl = pnlByDate.get(iso) || 0;
-        let fill = "var(--surface-2)", op = 1;
-        if (has) { fill = pnl >= 0 ? "var(--win)" : "var(--loss)"; op = 0.28 + 0.72 * Math.min(1, Math.abs(pnl) / maxAbs); }
-        const rect = svgEl("rect", { x, y, width: cell, height: cell, rx: 3, fill, "fill-opacity": op, stroke: "var(--border)" });
-        if (has) { rect.style.cursor = "pointer"; bindTT(rect, `<div class="h">${fmtDateY(iso)}</div><div class="r">Day P&L <b class="${cls(pnl)}">${moneyS(pnl)}</b></div>`); }
-        svg.append(rect);
-      }
+    const dayMap = new Map();          // iso -> {pnl, n}
+    list.forEach(t => { const o = dayMap.get(t.date) || { pnl: 0, n: 0 }; o.pnl += t.pnl; o.n++; dayMap.set(t.date, o); });
+    if (!dayMap.size) { host.append(el("p", { class: "empty" }, "No trades in this view.")); return; }
+
+    const toIdx = iso => { const [Y, M] = iso.split("-").map(Number); return Y * 12 + (M - 1); };
+    const keys = [...dayMap.keys()].sort();
+    const minIdx = toIdx(keys[0]), maxIdx = toIdx(keys[keys.length - 1]);
+    if (calCursor == null || calCursor < minIdx || calCursor > maxIdx) calCursor = maxIdx;
+    const y = Math.floor(calCursor / 12), m = calCursor % 12;
+    const pad = n => String(n).padStart(2, "0");
+    const monKey = `${y}-${pad(m + 1)}`;
+
+    // bucket the month's days into calendar weeks (Mon-Fri columns)
+    const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const bucket = new Map();
+    for (let d = 1; d <= dim; d++) {
+      const dt = new Date(Date.UTC(y, m, d)), wd = (dt.getUTCDay() + 6) % 7;
+      const mon = new Date(dt); mon.setUTCDate(dt.getUTCDate() - wd);
+      const wk = mon.toISOString().slice(0, 10);
+      if (!bucket.has(wk)) bucket.set(wk, { mon: wk, cells: new Array(5).fill(undefined), total: 0, n: 0, green: 0, td: 0 });
+      const b = bucket.get(wk), iso = dt.toISOString().slice(0, 10), rec = dayMap.get(iso);
+      if (wd <= 4) b.cells[wd] = { day: d, iso, rec };
+      if (rec) { b.total += rec.pnl; b.n += rec.n; b.td++; if (rec.pnl > 0) b.green++; }
     }
-    host.append(svg);
+    const weeks = [...bucket.values()].sort((a, b) => a.mon < b.mon ? -1 : 1);
+
+    // month summary
+    let mTot = 0, mN = 0, mG = 0, mR = 0, maxAbs = 1;
+    dayMap.forEach((o, iso) => { if (iso.slice(0, 7) === monKey) { mTot += o.pnl; mN += o.n; if (o.pnl > 0) mG++; else if (o.pnl < 0) mR++; maxAbs = Math.max(maxAbs, Math.abs(o.pnl)); } });
+
+    // nav bar
+    const title = new Date(Date.UTC(y, m, 1)).toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+    const mkNav = (label, delta, enabled) => { const b = el("button", { class: "cal-nav-btn", "aria-label": delta < 0 ? "Previous month" : "Next month", onclick: () => { if (!enabled) return; calCursor += delta; renderCalendar(list); } }, label); b.disabled = !enabled; return b; };
+    const nav = el("div", { class: "cal-nav" }, [
+      el("div", { class: "cal-nav-l" }, [mkNav("‹", -1, calCursor > minIdx), el("div", { class: "cal-title" }, title), mkNav("›", 1, calCursor < maxIdx)]),
+      el("div", { class: "cal-nav-r" }, [
+        el("div", { class: "cal-msum " + cls(mTot) }, moneyS(mTot)),
+        el("div", { class: "cal-msub" }, mN ? `${mN} trades · ${mG}G / ${mR}R` : "no trades"),
+      ]),
+    ]);
+
+    // grid
+    const scroll = el("div", { class: "cal-scroll" });
+    const head = el("div", { class: "cal-grid cal-head" });
+    ["Mon", "Tue", "Wed", "Thu", "Fri", "Week"].forEach(l => head.append(el("div", { class: "cal-wdh" }, l)));
+    const grid = el("div", { class: "cal-grid" });
+    weeks.forEach(w => {
+      for (let i = 0; i < 5; i++) {
+        const c = w.cells[i];
+        if (!c) { grid.append(el("div", { class: "cal-cell out" })); continue; }
+        if (!c.rec) { grid.append(el("div", { class: "cal-cell empty" }, [el("span", { class: "cal-dnum" }, String(c.day))])); continue; }
+        const p = c.rec.pnl, pos = p >= 0;
+        const cell = el("div", { class: "cal-cell " + (pos ? "win" : "loss") }, [
+          el("span", { class: "cal-dnum" }, String(c.day)),
+          el("div", { class: "cal-pnl " + cls(p) }, money0(p)),
+          el("div", { class: "cal-sub" }, `${c.rec.n} trade${c.rec.n > 1 ? "s" : ""}`),
+        ]);
+        cell.style.setProperty("--tint", (0.12 + 0.34 * Math.min(1, Math.abs(p) / maxAbs)).toFixed(3));
+        bindTT(cell, `<div class="h">${fmtDateY(c.iso)}</div><div class="r">Net P&L <b class="${cls(p)}">${moneyS(p)}</b></div><div class="r">Trades <b>${c.rec.n}</b></div>`);
+        grid.append(cell);
+      }
+      const wt = el("div", { class: "cal-cell week " + (w.n ? cls(w.total) : "") }, [
+        el("span", { class: "cal-dnum" }, "Week"),
+        el("div", { class: "cal-pnl " + cls(w.total) }, w.n ? money0(w.total) : "—"),
+        el("div", { class: "cal-sub" }, w.n ? `${w.green}/${w.td} green` : ""),
+      ]);
+      grid.append(wt);
+    });
+    scroll.append(head, grid);
+    host.append(nav, scroll);
   }
 
   /* ---------------- grouped bars (time-of-day / weekday) ---------------- */
