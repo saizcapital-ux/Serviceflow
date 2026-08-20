@@ -1,41 +1,54 @@
 # The Reclaim Playbook — TradingView indicator
 
-A Pine v5 overlay that runs the cheat-sheet on your live chart: auto S/R levels,
-a flush→reclaim entry marker, the 6-point checklist scored in real time, a
-regime/size read, and a hard NO-TRADE block over your 12–1pm ET hour.
+A Pine v5 overlay that reads **four signals together** and scores a **LONG or
+SHORT** live on your chart, then blocks your worst hour.
+
+## The four signals
+1. **9 / 21 EMA cross** — the trigger. Bull cross (9 over 21) = long trigger,
+   bear cross = short trigger. Small △/▽ marks every cross; a filled ▲/▼ prints
+   only when the cross also passes the checklist.
+2. **Auto-anchored Volume Profile** — bias. The profile is drawn on the right
+   (green above POC, red below, gold = POC line). **Price above POC = bullish,
+   below POC = bearish.** Anchor to the **session** open or the **last swing**.
+3. **VWAP position** — above VWAP = long bias, below = short bias. A valid long
+   won’t fire below VWAP, and a short won’t fire above it.
+4. **Support / Resistance** — auto pivots (gold lines). A long wants to be **at
+   support / reclaiming** it; a short **at resistance / rejecting** it.
+
+Volume spike and reward:risk complete a **6-point checklist**. Score **4+ with a
+trigger → TAKE IT**; under 4 → wait.
 
 ## Install
-1. Open **TradingView → Pine Editor** (bottom panel).
-2. Paste the full contents of [`reclaim-playbook.pine`](./reclaim-playbook.pine).
-3. Click **Add to chart**.
-4. Best on a **1–5 min** chart of a ride-list name (SPCX / META / AAPL / TSLA).
-5. (Optional) Right-click the ▲ signal → **Add alert** on “Reclaim entry (≥4/6)”
-   so it pings you instead of you hunting.
+1. TradingView → **Pine Editor** → paste [`reclaim-playbook.pine`](./reclaim-playbook.pine) → **Add to chart**.
+2. Use a **1–5 min** chart of a ride-list name (SPCX / META / AAPL / TSLA).
+3. Right-click a ▲/▼ → **Add alert** on the Long/Short confluence condition.
 
-## What each piece maps to
-| On the chart | Cheat-sheet item |
+## On the chart
+| Element | Meaning |
 |---|---|
-| Gold horizontal lines | Your marked S/R levels |
-| Blue line (fast MA) / gold line (slow MA) | Trend + trigger |
-| ▲ RECLAIM marker + dashed stop/target | A valid flush→reclaim entry (≥4/6) |
-| Red shaded band | 12–1pm ET — no-trade, verdict forced to NO-TRADE |
-| Corner table | Live 6-point score, verdict, regime, max size, current R:R |
+| Blue / gold lines | 9 EMA / 21 EMA |
+| Purple line | VWAP |
+| Right-edge histogram + gold dotted line | Volume profile + POC |
+| Gold horizontal rays | Support / resistance pivots |
+| ▲ LONG / ▼ SHORT | Trigger + 4/6 confluence, VWAP-aligned, outside no-trade |
+| △ / ▽ | A raw EMA cross that did **not** clear the checklist |
+| Red shaded band | 12–1pm ET — verdict force-locked to NO-TRADE |
+| Corner table | Direction, the 6 checks, score, verdict, POC, VWAP, regime, size, R:R |
 
-## The 6 checks (how they’re computed)
-1. **At a level** — price within `nearMult × ATR` of the nearest pivot level
-2. **Flush → reclaim** — bar wicked below support and closed back above it
-3. **Fast MA reclaim** — close above the fast EMA and the EMA curling up
-4. **Volume spike** — volume above `volMult ×` its average
-5. **Clear runway** — room to the next level ≥ `runwayMult × ATR`
-6. **R:R** — (target − entry) ÷ (entry − stop) ≥ your minimum (default 2:1)
+## Reading the table
+It auto-picks the side with more confluence and shows that direction’s six
+checks. **VERDICT = TAKE** means: a fresh EMA cross or level reclaim, ≥4/6, on
+the right side of VWAP, and not in your no-trade hour. Anything else says WAIT.
 
-Score **4+ and a reclaim → TAKE IT**. Under 4 → it’s a churn trade; wait.
+## Tuning (settings gear)
+- **Volume Profile anchor** — *Session* for intraday balance, *Last swing* to
+  measure the current leg only.
+- **Profile rows** — more rows = finer POC.
+- **Pivot lookback** — higher = fewer, stronger S/R levels.
+- **Volume spike ×** and **Min reward:risk** — raise to demand cleaner setups.
+- **ADX ≥** — regime cutoff for the TREND/PIN + size read.
+- **No-trade window** — HHMM-HHMM in your timezone.
 
-## Tuning
-- **Choppier names / higher timeframe:** raise *Pivot lookback* (fewer, stronger levels).
-- **More/fewer signals:** lower/raise *Volume spike ×* and *Min reward:risk*.
-- **Different bad hour or session:** edit the *No-trade window* (HHMM-HHMM, ET).
-- **Regime sensitivity:** *ADX ≥* threshold — higher = only calls true trend days “TREND”.
-
-> Signals confirm on bar close. Read the table on your entry bar, not intrabar.
-> Decision support only — not investment advice. Validate on your own chart first.
+> Signals confirm on **bar close** — read the table on your entry bar, not
+> intrabar. Decision support only, not investment advice. Validate on your own
+> chart before sizing up.
