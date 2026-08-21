@@ -342,10 +342,19 @@
   }
 
   /* ---------------- Symbol price chart ---------------- */
-  const chartable = meta.chartableSymbols.slice().sort((a, b) => symbolPnl(b) - symbolPnl(a));
   function symbolPnl(sym) { return ALL.filter(t => t.symbol === sym).reduce((s, t) => s + t.pnl, 0); }
-  let currentSym = chartable.includes("SPY") ? "SPY" : chartable[0];
-  let intradayMode = false;
+  const INTRA = D.intraday2 || {};
+  // days (per symbol) that have accurate intraday price data, newest first
+  function intradayDays(sym) {
+    return Object.keys(INTRA).filter(k => k.slice(0, k.indexOf("|")) === sym)
+      .map(k => k.slice(k.indexOf("|") + 1)).sort().reverse();
+  }
+  // symbols we can chart: those with a daily series OR intraday data
+  const chartable = [...new Set([...meta.chartableSymbols, ...(meta.intradaySymbols || [])])]
+    .filter(s => (D.prices[s] && D.prices[s].length) || intradayDays(s).length)
+    .sort((a, b) => symbolPnl(b) - symbolPnl(a));
+  let currentSym = chartable.includes("TSLA") ? "TSLA" : chartable[0];
+  let currentView = "";  // "" = daily, otherwise an ISO date with intraday data
 
   function renderSymbolControls() {
     const sel = $("#symSel"); sel.innerHTML = "";
@@ -354,13 +363,24 @@
       const o = el("option", { value: sym }, `${sym}  (${n} trades · ${moneyS(symbolPnl(sym))})`);
       if (sym === currentSym) o.selected = true; sel.append(o);
     });
-    sel.onchange = () => { currentSym = sel.value; intradayMode = false; syncIntradayBtn(); renderSymbolChart(); };
-    syncIntradayBtn();
-    $("#intradayBtn").onclick = () => { intradayMode = !intradayMode; if (intradayMode) { currentSym = "SPY"; sel.value = "SPY"; } syncIntradayBtn(); renderSymbolChart(); };
+    sel.onchange = () => { currentSym = sel.value; currentView = defaultView(currentSym); renderDayControl(); renderSymbolChart(); };
+    currentView = defaultView(currentSym);
+    renderDayControl();
   }
-  function syncIntradayBtn() {
-    const b = $("#intradayBtn"); b.classList.toggle("active", intradayMode);
-    b.textContent = (intradayMode ? "◉ " : "○ ") + "Intraday · SPY " + fmtDate(meta.intradayDate);
+  function defaultView(sym) { const d = intradayDays(sym); return d.length ? d[0] : ""; }
+  function renderDayControl() {
+    const dsel = $("#daySel"); dsel.innerHTML = "";
+    const days = intradayDays(currentSym);
+    if (D.prices[currentSym] && D.prices[currentSym].length)
+      dsel.append(el("option", { value: "" }, "Daily · full history"));
+    days.forEach(d => {
+      const n = ALL.filter(t => t.symbol === currentSym && t.date === d).length;
+      dsel.append(el("option", { value: d }, `${fmtDate(d)} · intraday · ${n} fill${n > 1 ? "s" : ""}`));
+    });
+    if (![...dsel.options].some(o => o.value === currentView)) currentView = dsel.options.length ? dsel.options[0].value : "";
+    dsel.value = currentView;
+    dsel.disabled = dsel.options.length <= 1;
+    dsel.onchange = () => { currentView = dsel.value; renderSymbolChart(); };
   }
   const triangle = (cx, cy, r, up) => up
     ? `${cx},${cy - r} ${cx - r * 0.9},${cy + r * 0.72} ${cx + r * 0.9},${cy + r * 0.72}`
@@ -371,19 +391,19 @@
     const W = 920, H = 380, P = { t: 16, r: 16, b: 28, l: 56 };
     const iw = W - P.l - P.r, ih = H - P.t - P.b;
     const filteredIds = new Set(getFiltered().map(tradeId));  // respect date/type filters for markers
+    const intra = currentView !== "";
     let bars, symTrades, labelFmt, title;
-    if (intradayMode) {
-      bars = D.intraday.map(b => ({ t: b.t, o: b.o, h: b.h, l: b.l, c: b.c }));
-      symTrades = ALL.filter(t => t.symbol === "SPY" && t.date === meta.intradayDate && filteredIds.has(tradeId(t)));
-      title = `SPY · ${fmtDateY(meta.intradayDate)} · 5-min bars`; labelFmt = fmtTime;
+    if (intra) {
+      bars = (INTRA[`${currentSym}|${currentView}`] || []).map(r => ({ t: r[0], o: r[1], h: r[2], l: r[3], c: r[4] }));
+      symTrades = ALL.filter(t => t.symbol === currentSym && t.date === currentView && filteredIds.has(tradeId(t)));
+      title = `${currentSym} · ${fmtDateY(currentView)} · 5-min bars · fills at exact time & price`; labelFmt = fmtTime;
     } else {
-      const raw = D.prices[currentSym] || [];
-      bars = raw.map(r => ({ t: r[0], o: r[1], h: r[2], l: r[3], c: r[4] }));
+      bars = (D.prices[currentSym] || []).map(r => ({ t: r[0], o: r[1], h: r[2], l: r[3], c: r[4] }));
       symTrades = ALL.filter(t => t.symbol === currentSym && filteredIds.has(tradeId(t)));
-      title = `${currentSym} · daily`; labelFmt = fmtDate;
+      title = `${currentSym} · daily · each fill on its trading day`; labelFmt = fmtDate;
     }
     $("#symTitle").textContent = title;
-    if (!bars.length) { host.append(el("p", { class: "empty" }, "No price data for this symbol.")); $("#symMeta").textContent = ""; return; }
+    if (!bars.length) { host.append(el("p", { class: "empty" }, "No price data for this view.")); $("#symMeta").textContent = ""; return; }
     const hi = Math.max(...bars.map(b => b.h)), lo = Math.min(...bars.map(b => b.l));
     const pad = (hi - lo) * 0.06 || 1, yhi = hi + pad, ylo = lo - pad;
     const X = i => P.l + (bars.length <= 1 ? iw / 2 : (i + 0.5) / bars.length * iw);
@@ -398,35 +418,54 @@
       svg.append(svgEl("rect", { x: x - cw / 2, y: Math.min(yO, yC), width: cw, height: Math.max(1, Math.abs(yC - yO)), fill: col, opacity: 0.5, rx: 0.5 }));
     });
     for (let k = 0; k <= 5; k++) { const idx = Math.round(k / 5 * (bars.length - 1)), x = X(idx); const lab = svgEl("text", { class: "axis-txt", x, y: H - 9, "text-anchor": "middle" }); lab.textContent = labelFmt(bars[idx].t); svg.append(lab); }
-    function barIndexFor(tr) {
-      if (intradayMode) { const tms = new Date(tr.t).getTime(); let best = 0, bd = Infinity; bars.forEach((b, i) => { const d = Math.abs(new Date(b.t).getTime() - tms); if (d < bd) { bd = d; best = i; } }); return best; }
-      let idx = bars.findIndex(b => b.t === tr.date);
-      if (idx < 0) { for (let i = bars.length - 1; i >= 0; i--) { if (bars[i].t <= tr.date) { idx = i; break; } } }
-      return idx < 0 ? 0 : idx;
+    // ----- accurate marker placement -----
+    // Intraday: fractional bar position by fill time + interpolated underlying price.
+    // Daily: the fill's own trading-day bar.
+    const barMs = bars.length > 1 ? new Date(bars[1].t) - new Date(bars[0].t) : 3e5;
+    function placeIntraday(tr) {
+      const tms = new Date(tr.t).getTime();
+      let j = 0;
+      for (let i = 0; i < bars.length; i++) { if (new Date(bars[i].t).getTime() <= tms) j = i; else break; }
+      const frac = Math.max(0, Math.min(1, (tms - new Date(bars[j].t).getTime()) / barMs));
+      const b = bars[j];
+      const price = Math.max(b.l, Math.min(b.h, b.o + frac * (b.c - b.o)));  // path within the bar
+      return { x: X(j) + frac * (iw / bars.length), y: Y(price), price };
     }
-    const groups = new Map();
-    symTrades.forEach(tr => { const i = barIndexFor(tr); if (!groups.has(i)) groups.set(i, []); groups.get(i).push(tr); });
+    function placeDaily(tr) {
+      let idx = bars.findIndex(b => b.t === tr.date);
+      if (idx < 0) for (let i = bars.length - 1; i >= 0; i--) { if (bars[i].t <= tr.date) { idx = i; break; } }
+      if (idx < 0) idx = 0;
+      return { x: X(idx), y: Y(bars[idx].c), price: bars[idx].c, idx };
+    }
     const maxAbs = Math.max(...symTrades.map(t => Math.abs(t.pnl)), 1);
     const layer = svgEl("g", {});
-    groups.forEach((arr, i) => {
-      arr.sort((a, b) => new Date(a.t) - new Date(b.t));
-      const baseX = X(i), baseY = Y(bars[i].c), spread = Math.min(cw * 1.1 + 6, 22);
-      arr.forEach((tr, k) => {
-        const win = tr.pnl >= 0, r = 5 + Math.sqrt(Math.abs(tr.pnl) / maxAbs) * 6;
-        const off = arr.length > 1 ? (k - (arr.length - 1) / 2) * spread : 0;
-        const tri = svgEl("polygon", { points: triangle(baseX + off, baseY, r, win), fill: win ? "var(--win)" : "var(--loss)", stroke: "var(--surface-1)", "stroke-width": 1.6 });
-        tri.style.cursor = "pointer";
-        const nt = notes[tradeId(tr)];
-        bindTT(tri, `<div class="h">${tr.symbol} · ${win ? "WIN" : "LOSS"}</div>
-          <div class="r">${fmtDateY(tr.t)}${intradayMode ? " · " + fmtTime(tr.t) : ""}</div>
-          <div class="r">Realized <b class="${cls(tr.pnl)}">${moneyS(tr.pnl)}</b></div>
-          <div class="r">Underlying <b>$${bars[i].c.toFixed(2)}</b></div>
-          ${nt && nt.tag ? `<div class="r">Tag <b>${nt.tag}</b></div>` : ""}${nt && nt.note ? `<div class="r">“${nt.note}”</div>` : ""}`);
-        layer.append(tri);
+    // group daily fills that share a bar so we can fan them out; intraday fills stand alone
+    const daily = new Map();
+    if (!intra) symTrades.forEach(tr => { const p = placeDaily(tr); if (!daily.has(p.idx)) daily.set(p.idx, []); daily.get(p.idx).push(tr); });
+    function drawMarker(tr, x, y, price, off) {
+      const win = tr.pnl >= 0, r = 5 + Math.sqrt(Math.abs(tr.pnl) / maxAbs) * 6;
+      const tri = svgEl("polygon", { points: triangle(x + (off || 0), y, r, win), fill: win ? "var(--win)" : "var(--loss)", stroke: "var(--surface-1)", "stroke-width": 1.6 });
+      tri.style.cursor = "pointer";
+      const nt = notes[tradeId(tr)];
+      bindTT(tri, `<div class="h">${tr.symbol} · ${win ? "WIN" : "LOSS"}</div>
+        <div class="r">${fmtDateY(tr.t)}${intra ? " · " + fmtTime(tr.t) : ""}</div>
+        <div class="r">Realized <b class="${cls(tr.pnl)}">${moneyS(tr.pnl)}</b></div>
+        <div class="r">Underlying <b>$${price.toFixed(2)}</b></div>
+        ${nt && nt.tag ? `<div class="r">Tag <b>${nt.tag}</b></div>` : ""}${nt && nt.note ? `<div class="r">“${nt.note}”</div>` : ""}`);
+      layer.append(tri);
+    }
+    if (intra) {
+      symTrades.forEach(tr => { const p = placeIntraday(tr); drawMarker(tr, p.x, p.y, p.price, 0); });
+    } else {
+      const spread = Math.min(cw * 1.1 + 6, 22);
+      daily.forEach(arr => {
+        arr.sort((a, b) => new Date(a.t) - new Date(b.t));
+        const p = placeDaily(arr[0]);
+        arr.forEach((tr, k) => drawMarker(tr, p.x, p.y, p.price, arr.length > 1 ? (k - (arr.length - 1) / 2) * spread : 0));
       });
-    });
+    }
     svg.append(layer); host.append(svg);
-    $("#symMeta").textContent = `${symTrades.length} trades plotted · ${symTrades.filter(t => t.pnl > 0).length}W / ${symTrades.filter(t => t.pnl < 0).length}L · net ${moneyS(symTrades.reduce((s, t) => s + t.pnl, 0))}`;
+    $("#symMeta").textContent = `${symTrades.length} fills plotted · ${symTrades.filter(t => t.pnl > 0).length}W / ${symTrades.filter(t => t.pnl < 0).length}L · net ${moneyS(symTrades.reduce((s, t) => s + t.pnl, 0))}`;
   }
 
   /* ---------------- Symbol breakdown ---------------- */

@@ -201,7 +201,7 @@
         <h2>Where I took my trades</h2>
         <div class="controls">
           <select class="sel" id="symSel"></select>
-          <button class="chip" id="intradayBtn">Intraday</button>
+          <select class="sel" id="daySel"></select>
         </div>
       </div>
       <div class="hint" id="symTitle" style="margin-bottom:8px"></div>
@@ -212,7 +212,7 @@
         <span class="k"><span class="swatch" style="background:var(--series-1);opacity:.55"></span> price candles (marker size ∝ P&amp;L)</span>
         <span class="k tag" id="symMeta"></span>
       </div>
-      <p class="note" style="margin-top:10px">Each marker is placed on the underlying's price where you opened/closed the position. Toggle <b>Intraday</b> to see today's SPY trades on 5-minute bars at their exact fill times.</p>
+      <p class="note" style="margin-top:10px">Pick a <b>day</b> to place each fill on 5-minute bars at its <b>exact time and the underlying price at that moment</b> — the true spot where you took the trade. The <b>Daily</b> view shows the full history with each fill on its trading day.</p>
     </section>
 
     <div class="grid-2">
