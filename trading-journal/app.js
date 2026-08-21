@@ -948,7 +948,11 @@
     const rows = [...m.entries()].sort((a, b) => a[0] < b[0] ? 1 : -1);
     const maxAbs = Math.max(...rows.map(r => Math.abs(r[1].pnl)), 1);
     const host = $("#monthly"); host.innerHTML = "";
-    host.append(el("div", { class: "mon-row head" }, [el("div", {}, "Month"), el("div", {}, ""), el("div", { style: "text-align:right" }, "Net · win%")]));
+    host.append(el("div", { class: "mon-row head" }, [
+      el("div", {}, "Month"), el("div", {}, ""),
+      el("div", { style: "text-align:right" }, "Net"),
+      el("div", { style: "text-align:right" }, "Win %"),
+    ]));
     rows.forEach(([k, o]) => {
       const [y, mo] = k.split("-");
       const name = new Date(Date.UTC(+y, +mo - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
@@ -957,10 +961,18 @@
       f.style.background = o.pnl >= 0 ? "var(--win)" : "var(--loss)";
       if (o.pnl >= 0) { f.style.left = "50%"; f.style.width = w + "%"; } else { f.style.right = "50%"; f.style.width = w + "%"; }
       const bar = el("div", { class: "mon-bar" }, [el("div", { class: "z" }), f]);
+      const wr = Math.round(o.w / o.n * 100);
+      const wrFill = el("i"); wrFill.style.width = wr + "%"; wrFill.style.background = wr >= 50 ? "var(--win)" : "var(--loss)";
+      const wrCell = el("div", { class: "mwr" }, [
+        el("span", { class: "wrbar" }, wrFill),
+        el("b", { class: cls(wr - 50) }, wr + "%"),
+      ]);
+      wrCell.title = `${o.w}W / ${o.n - o.w}L of ${o.n} trades`;
       host.append(el("div", { class: "mon-row" }, [
         el("div", { class: "mname" }, [name, el("small", {}, ` · ${o.n}`)]),
         bar,
-        el("div", { class: "mamt " + cls(o.pnl) }, `${moneyS(o.pnl)} · ${Math.round(o.w / o.n * 100)}%`),
+        el("div", { class: "mamt " + cls(o.pnl) }, moneyS(o.pnl)),
+        wrCell,
       ]));
     });
   }
