@@ -976,6 +976,85 @@
       ]));
     });
   }
+  /* ---------------- $100K roadmap ---------------- */
+  const RM_HOL = new Set(["2026-09-07", "2026-11-26", "2026-12-25", "2027-01-01", "2027-01-18"]);
+  const rmISO = d => d.toISOString().slice(0, 10);
+  const rmParse = s => { const [y, m, dd] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, dd)); };
+  function rmTdays(a, b) {  // trading weekdays in (a, b]
+    let n = 0; const d = new Date(a);
+    while (true) { d.setUTCDate(d.getUTCDate() + 1); if (d > b) break; const wd = d.getUTCDay(); if (wd >= 1 && wd <= 5 && !RM_HOL.has(rmISO(d))) n++; }
+    return n;
+  }
+  function renderRoadmap() {
+    const g = meta.goal; if (!g) { $("#roadmapCard").classList.add("hidden"); return; }
+    const anchor = rmParse(g.anchorDate), deadline = rmParse(g.deadline);
+    const nd = new Date(), today = new Date(Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth(), nd.getUTCDate()));
+    const cur = today < anchor ? anchor : (today > deadline ? deadline : today);
+    const Ntot = rmTdays(anchor, deadline), daysLeft = rmTdays(cur, deadline), elapsed = Ntot - daysLeft;
+    const live = g.anchorEquity + (meta.totalPnl - g.anchorPnl);
+    const target = g.target, mult = target / g.anchorEquity;
+    const curveVal = td => g.anchorEquity * Math.pow(mult, td / Ntot);
+    const todayTarget = curveVal(elapsed), toGo = target - live, pctDone = Math.max(0, Math.min(1, live / target));
+    const bigMoney = v => "$" + Math.round(v).toLocaleString("en-US");
+    const kMoney = v => v >= 1000 ? "$" + (v / 1000).toFixed(v < 10000 ? 1 : 0) + "k" : bigMoney(v);
+
+    $("#rmDeadline").textContent = `by ${fmtDateY(g.deadline)} · ${daysLeft} trading days left`;
+    $("#rmNow").textContent = bigMoney(live);
+    $("#rmToGo").innerHTML = `<b>${bigMoney(toGo)}</b>`;
+    $("#rmFill").style.width = (pctDone * 100).toFixed(1) + "%";
+    $("#rmTick").style.left = (Math.min(1, todayTarget / target) * 100).toFixed(1) + "%";
+    const ahead = live >= todayTarget - 1, gap = Math.abs(live - todayTarget);
+    $("#rmStatus").innerHTML = ahead
+      ? `<span class="ahead">▲ On pace</span> — at/above today's ${bigMoney(todayTarget)} mark`
+      : `<span class="behind">● Behind pace</span> — ${bigMoney(gap)} under today's ${bigMoney(todayTarget)} mark`;
+
+    const rDay = Math.pow(mult, 1 / Ntot) - 1, rWeek = Math.pow(mult, 5 / Ntot) - 1, rMonth = Math.pow(mult, 21 / Ntot) - 1;
+    const byDay = new Map(); ALL.forEach(t => byDay.set(t.date, (byDay.get(t.date) || 0) + t.pnl));
+    const rdays = [...byDay.entries()].sort((a, b) => a[0] < b[0] ? 1 : -1).slice(0, 20);
+    const avgDay = rdays.length ? rdays.reduce((s, d) => s + d[1], 0) / rdays.length : 0;
+    const projLinear = live + avgDay * daysLeft;
+
+    const mh = $("#rmMetrics"); mh.innerHTML = "";
+    [["Need / day", pct(rDay), "compounded"], ["Need / week", pct(rWeek), ""], ["Need / month", pct(rMonth), ""],
+     ["Your pace", moneyS(avgDay) + "/day", `≈ ${pct(avgDay * 21 / live)} /mo`]]
+      .forEach(([l, v, s]) => mh.append(el("div", { class: "rm-metric" }, [el("div", { class: "l" }, l), el("div", { class: "v" }, v), el("div", { class: "s" }, s)])));
+
+    const nowKey = rmISO(cur).slice(0, 7);
+    const cps = [["2026-08-31", "Aug"], ["2026-09-30", "Sep"], ["2026-10-31", "Oct"], ["2026-11-30", "Nov"], ["2026-12-31", "Dec"], ["2027-01-21", "Jan 21"]];
+    const ch = $("#rmCheckpoints"); ch.innerHTML = "";
+    cps.forEach(([d, label]) => {
+      const td = Math.min(rmTdays(anchor, rmParse(d)), Ntot), val = curveVal(td), done = live >= val, isNow = d.slice(0, 7) === nowKey;
+      ch.append(el("div", { class: "rm-cp " + (done ? "done" : isNow ? "now" : "") }, [
+        el("div", { class: "m" }, label),
+        el("div", { class: "t" }, kMoney(val)),
+        el("div", { class: "d " + (done ? "pos" : "") }, done ? "✓ hit" : ""),
+      ]));
+    });
+
+    drawRoadmapChart(anchor, deadline, Ntot, elapsed, live, target, curveVal, avgDay, daysLeft);
+    $("#rmNote").innerHTML = `Account value tracks your realized-P&L growth on a ${bigMoney(g.anchorEquity)} base — it auto-advances with every refresh. The purple curve is the <b>compounding path</b> to $100K: it needs <b>${pct(rDay)} per trading day</b>, scaling your size up as the account grows. At your current pace (${moneyS(avgDay)}/day) you'd reach <b>${bigMoney(projLinear)}</b> by the deadline — closing that gap means a bigger edge per day, not bigger risk. Informational, not investment advice.`;
+  }
+  function drawRoadmapChart(anchor, deadline, Ntot, elapsed, live, target, curveVal, avgDay, daysLeft) {
+    const host = $("#rmChart"); host.innerHTML = "";
+    const W = 920, H = 230, P = { t: 14, r: 16, b: 26, l: 54 };
+    const iw = W - P.l - P.r, ih = H - P.t - P.b, ymax = target * 1.03;
+    const X = td => P.l + td / Ntot * iw, Y = v => P.t + (1 - v / ymax) * ih;
+    const svg = svgEl("svg", { class: "chart-svg", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" }); svg.style.height = "230px";
+    [0, 25000, 50000, 75000, 100000].forEach(v => { const y = Y(v); svg.append(svgEl("line", { class: "grid-line", x1: P.l, x2: W - P.r, y1: y, y2: y })); const lab = svgEl("text", { class: "axis-txt", x: P.l - 8, y: y + 3, "text-anchor": "end" }); lab.textContent = "$" + v / 1000 + "k"; svg.append(lab); });
+    let dp = "";
+    for (let i = 0; i <= 60; i++) { const td = Ntot * i / 60, x = X(td), y = Y(curveVal(td)); dp += (i ? "L" : "M") + x.toFixed(1) + "," + y.toFixed(1); }
+    svg.append(svgEl("path", { d: dp + `L${X(Ntot).toFixed(1)},${Y(0).toFixed(1)}L${X(0).toFixed(1)},${Y(0).toFixed(1)}Z`, fill: "var(--accent)", "fill-opacity": 0.08, stroke: "none" }));
+    svg.append(svgEl("path", { d: dp, fill: "none", stroke: "var(--accent)", "stroke-width": 2.5 }));
+    const proj = Math.max(0, live + avgDay * daysLeft);
+    svg.append(svgEl("line", { x1: X(elapsed), y1: Y(live), x2: X(Ntot), y2: Y(proj), stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "4 4" }));
+    const pl = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(proj) - 5, "text-anchor": "end" }); pl.textContent = "current pace"; svg.append(pl);
+    [["2026-08-31"], ["2026-09-30"], ["2026-10-31"], ["2026-11-30"], ["2026-12-31"], ["2027-01-21"]].forEach(([d]) => { const td = Math.min(rmTdays(anchor, rmParse(d)), Ntot); svg.append(svgEl("circle", { cx: X(td), cy: Y(curveVal(td)), r: 3.5, fill: "var(--accent)", stroke: "var(--surface-1)", "stroke-width": 1.5 })); });
+    const hx = X(elapsed), hy = Y(live);
+    svg.append(svgEl("circle", { cx: hx, cy: hy, r: 5, fill: "var(--win)", stroke: "var(--surface-1)", "stroke-width": 2 }));
+    const hl = svgEl("text", { class: "axis-txt", x: hx + 8, y: hy - 6, style: "font-weight:700;fill:var(--win)" }); hl.textContent = "you"; svg.append(hl);
+    [["2026-08-25", "Aug"], ["2026-09-30", "Sep"], ["2026-10-31", "Oct"], ["2026-11-30", "Nov"], ["2026-12-31", "Dec"], ["2027-01-21", "Jan"]].forEach(([d, l]) => { const td = Math.min(rmTdays(anchor, rmParse(d)), Ntot); const t = svgEl("text", { class: "axis-txt", x: X(td), y: H - 8, "text-anchor": "middle" }); t.textContent = l; svg.append(t); });
+    host.append(svg);
+  }
   function wireDiscipline() {
     document.querySelectorAll("#discWindow .chip").forEach(c => c.onclick = () => { discWin = +c.dataset.w; renderDiscipline(); });
   }
@@ -1020,6 +1099,7 @@
 
   /* ---------------- boot ---------------- */
   renderHeader();
+  renderRoadmap();
   renderSession();
   renderCoach();
   renderFilterBar();
