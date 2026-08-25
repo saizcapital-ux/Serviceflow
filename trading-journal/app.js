@@ -1001,16 +1001,35 @@
   }
   function renderRoadmap() {
     const g = meta.goal; if (!g) { $("#roadmapCard").classList.add("hidden"); return; }
-    const anchor = rmParse(g.anchorDate), deadline = rmParse(g.deadline);
+    const anchor = rmParse(g.anchorDate), deadline = rmParse(g.deadline), target = g.target;
     const nd = new Date(), today = new Date(Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth(), nd.getUTCDate()));
     const cur = today < anchor ? anchor : (today > deadline ? deadline : today);
     const Ntot = rmTdays(anchor, deadline), daysLeft = rmTdays(cur, deadline), elapsed = Ntot - daysLeft;
-    const live = g.anchorEquity + (meta.totalPnl - g.anchorPnl);
-    const target = g.target, mult = target / g.anchorEquity;
-    const curveVal = td => g.anchorEquity * Math.pow(mult, td / Ntot);
-    const todayTarget = curveVal(elapsed), toGo = target - live, pctDone = Math.max(0, Math.min(1, live / target));
     const bigMoney = v => "$" + Math.round(v).toLocaleString("en-US");
     const kMoney = v => v >= 1000 ? "$" + (v / 1000).toFixed(v < 10000 ? 1 : 0) + "k" : bigMoney(v);
+
+    // ---- scheduled deposits ----
+    const contribs = (g.contributions || []).map(c => ({ date: rmParse(c.d), amt: c.amt }));
+    const byTd = {}; const cum = new Array(Ntot + 1).fill(0);
+    contribs.forEach(c => { const td = c.date <= anchor ? 0 : Math.min(rmTdays(anchor, c.date), Ntot); byTd[td] = (byTd[td] || 0) + c.amt; });
+    let running = 0; for (let t = 0; t <= Ntot; t++) { running += (byTd[t] || 0); cum[t] = running; }
+    const totalContrib = contribs.reduce((s, c) => s + c.amt, 0);
+    const toDate = contribs.filter(c => c.date <= cur).reduce((s, c) => s + c.amt, 0);
+    const futureContrib = totalContrib - toDate;
+
+    // ---- live account value = base + trading P&L + deposits banked so far ----
+    const live = g.anchorEquity + (meta.totalPnl - g.anchorPnl) + toDate;
+    const toGo = target - live, pctDone = Math.max(0, Math.min(1, live / target));
+
+    // ---- solve the trading rate that (with deposits) reaches target ----
+    const simEnd = r => { let v = g.anchorEquity + (byTd[0] || 0); for (let t = 1; t <= Ntot; t++) { v = v * (1 + r) + (byTd[t] || 0); } return v; };
+    let lo = 0, hi = 0.25; for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (simEnd(m) < target) lo = m; else hi = m; }
+    const r = (lo + hi) / 2;
+    const path = new Array(Ntot + 1); { let v = g.anchorEquity + (byTd[0] || 0); path[0] = v; for (let t = 1; t <= Ntot; t++) { v = v * (1 + r) + (byTd[t] || 0); path[t] = v; } }
+    const curveVal = td => { const i = Math.max(0, Math.min(Ntot - 1, Math.floor(td))), f = td - i; return path[i] + (path[i + 1] - path[i]) * f; };
+    const baseVal = td => g.anchorEquity + cum[Math.max(0, Math.min(Ntot, Math.round(td)))];
+    const rMonth = Math.pow(1 + r, 21) - 1, rWeek = Math.pow(1 + r, 5) - 1;
+    const todayTarget = curveVal(elapsed);
 
     $("#rmDeadline").textContent = `by ${fmtDateY(g.deadline)} · ${daysLeft} trading days left`;
     $("#rmNow").textContent = bigMoney(live);
@@ -1022,15 +1041,14 @@
       ? `<span class="ahead">▲ On pace</span> — at/above today's ${bigMoney(todayTarget)} mark`
       : `<span class="behind">● Behind pace</span> — ${bigMoney(gap)} under today's ${bigMoney(todayTarget)} mark`;
 
-    const rDay = Math.pow(mult, 1 / Ntot) - 1, rWeek = Math.pow(mult, 5 / Ntot) - 1, rMonth = Math.pow(mult, 21 / Ntot) - 1;
     const byDay = new Map(); ALL.forEach(t => byDay.set(t.date, (byDay.get(t.date) || 0) + t.pnl));
     const rdays = [...byDay.entries()].sort((a, b) => a[0] < b[0] ? 1 : -1).slice(0, 20);
     const avgDay = rdays.length ? rdays.reduce((s, d) => s + d[1], 0) / rdays.length : 0;
-    const projLinear = live + avgDay * daysLeft;
+    const proj = live + avgDay * daysLeft + futureContrib;
 
     const mh = $("#rmMetrics"); mh.innerHTML = "";
-    [["Need / day", pct(rDay), "compounded"], ["Need / week", pct(rWeek), ""], ["Need / month", pct(rMonth), ""],
-     ["Your pace", moneyS(avgDay) + "/day", `≈ ${pct(avgDay * 21 / live)} /mo`]]
+    [["Trade / day", pct(r), "compounded"], ["Trade / month", pct(rMonth), ""],
+     ["Deposits", "+" + kMoney(totalContrib), "incl. $9k May bonus"], ["Your pace", moneyS(avgDay) + "/day", `≈ ${pct(avgDay * 21 / live)} /mo`]]
       .forEach(([l, v, s]) => mh.append(el("div", { class: "rm-metric" }, [el("div", { class: "l" }, l), el("div", { class: "v" }, v), el("div", { class: "s" }, s)])));
 
     const nowKey = rmISO(cur).slice(0, 7);
@@ -1048,23 +1066,31 @@
       ]));
     });
 
-    drawRoadmapChart(anchor, deadline, Ntot, elapsed, live, target, curveVal, avgDay, daysLeft);
-    $("#rmNote").innerHTML = `Account value tracks your realized-P&L growth on a ${bigMoney(g.anchorEquity)} base — it auto-advances with every refresh. The purple curve is the <b>compounding path</b> to $100K: it needs <b>${pct(rDay)} per trading day</b>, scaling your size up as the account grows. At your current pace (${moneyS(avgDay)}/day) you'd reach <b>${bigMoney(projLinear)}</b> by the deadline — closing that gap means a bigger edge per day, not bigger risk. Informational, not investment advice.`;
+    drawRoadmapChart({ anchor, deadline, Ntot, elapsed, live, target, curveVal, baseVal, avgDay, daysLeft, futureContrib });
+    const yourMonthly = avgDay * 21 / live;
+    $("#rmNote").innerHTML = `Account value = your ${bigMoney(g.anchorEquity)} base + realized-P&L growth + deposits banked so far (auto-advances each refresh). Your <b>${kMoney(totalContrib)} of deposits</b> (incl. the $9k May bonus) do part of the climb — alone they'd reach <b>${bigMoney(g.anchorEquity + totalContrib)}</b> (dotted line), so trading only supplies the rest at <b>${pct(r)}/day (${pct(rMonth)}/mo)</b> — and you're <i>already</i> trading ≈ <b>${pct(yourMonthly)}/mo</b>. The catch is <b>compounding</b>: hold that % as the account grows (bigger size on a bigger base) and you clear the curve; keep sizing flat at ${moneyS(avgDay)}/day and you stall near <b>${bigMoney(proj)}</b>. Informational, not investment advice.`;
   }
-  function drawRoadmapChart(anchor, deadline, Ntot, elapsed, live, target, curveVal, avgDay, daysLeft) {
+  function drawRoadmapChart(c) {
+    const { anchor, deadline, Ntot, elapsed, live, target, curveVal, baseVal, avgDay, daysLeft, futureContrib } = c;
     const host = $("#rmChart"); host.innerHTML = "";
     const W = 920, H = 230, P = { t: 14, r: 16, b: 26, l: 54 };
     const iw = W - P.l - P.r, ih = H - P.t - P.b, ymax = target * 1.03;
     const X = td => P.l + td / Ntot * iw, Y = v => P.t + (1 - v / ymax) * ih;
     const svg = svgEl("svg", { class: "chart-svg", viewBox: `0 0 ${W} ${H}`, preserveAspectRatio: "none" }); svg.style.height = "230px";
     [0, 25000, 50000, 75000, 100000].forEach(v => { const y = Y(v); svg.append(svgEl("line", { class: "grid-line", x1: P.l, x2: W - P.r, y1: y, y2: y })); const lab = svgEl("text", { class: "axis-txt", x: P.l - 8, y: y + 3, "text-anchor": "end" }); lab.textContent = "$" + v / 1000 + "k"; svg.append(lab); });
-    let dp = "";
-    for (let i = 0; i <= 60; i++) { const td = Ntot * i / 60, x = X(td), y = Y(curveVal(td)); dp += (i ? "L" : "M") + x.toFixed(1) + "," + y.toFixed(1); }
+    // required curve (trading + deposits)
+    let dp = ""; for (let t = 0; t <= Ntot; t++) { dp += (t ? "L" : "M") + X(t).toFixed(1) + "," + Y(curveVal(t)).toFixed(1); }
     svg.append(svgEl("path", { d: dp + `L${X(Ntot).toFixed(1)},${Y(0).toFixed(1)}L${X(0).toFixed(1)},${Y(0).toFixed(1)}Z`, fill: "var(--accent)", "fill-opacity": 0.08, stroke: "none" }));
     svg.append(svgEl("path", { d: dp, fill: "none", stroke: "var(--accent)", "stroke-width": 2.5 }));
-    const proj = Math.max(0, live + avgDay * daysLeft);
+    // deposits-only baseline (dotted)
+    let bp = ""; for (let t = 0; t <= Ntot; t++) { bp += (t ? "L" : "M") + X(t).toFixed(1) + "," + Y(baseVal(t)).toFixed(1); }
+    svg.append(svgEl("path", { d: bp, fill: "none", stroke: "var(--text-secondary)", "stroke-width": 1.4, "stroke-dasharray": "2 3", opacity: 0.7 }));
+    svg.append((() => { const t = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(baseVal(Ntot)) - 5, "text-anchor": "end" }); t.textContent = "deposits only"; return t; })());
+    // current-pace projection (trading pace + remaining deposits)
+    const proj = Math.max(0, live + avgDay * daysLeft + futureContrib);
     svg.append(svgEl("line", { x1: X(elapsed), y1: Y(live), x2: X(Ntot), y2: Y(proj), stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "4 4" }));
-    const pl = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(proj) - 5, "text-anchor": "end" }); pl.textContent = "current pace"; svg.append(pl);
+    svg.append((() => { const t = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(proj) - 5, "text-anchor": "end" }); t.textContent = "current pace"; return t; })());
+    // milestone dots + you
     const cps = rmCheckpoints(anchor, deadline);
     cps.forEach(cd => { const td = Math.min(rmTdays(anchor, cd), Ntot); svg.append(svgEl("circle", { cx: X(td), cy: Y(curveVal(td)), r: 3.5, fill: "var(--accent)", stroke: "var(--surface-1)", "stroke-width": 1.5 })); });
     const hx = X(elapsed), hy = Y(live);
