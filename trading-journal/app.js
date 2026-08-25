@@ -977,13 +977,27 @@
     });
   }
   /* ---------------- $100K roadmap ---------------- */
-  const RM_HOL = new Set(["2026-09-07", "2026-11-26", "2026-12-25", "2027-01-01", "2027-01-18"]);
+  // US market holidays across the goal window (weekday closures only)
+  const RM_HOL = new Set(["2026-09-07", "2026-11-26", "2026-12-25", "2027-01-01", "2027-01-18",
+    "2027-02-15", "2027-03-26", "2027-05-31", "2027-07-05"]);
   const rmISO = d => d.toISOString().slice(0, 10);
   const rmParse = s => { const [y, m, dd] = s.split("-").map(Number); return new Date(Date.UTC(y, m - 1, dd)); };
   function rmTdays(a, b) {  // trading weekdays in (a, b]
     let n = 0; const d = new Date(a);
     while (true) { d.setUTCDate(d.getUTCDate() + 1); if (d > b) break; const wd = d.getUTCDay(); if (wd >= 1 && wd <= 5 && !RM_HOL.has(rmISO(d))) n++; }
     return n;
+  }
+  const rmMonthEnd = (y, m) => new Date(Date.UTC(y, m + 1, 0));  // last day of month m (0-based)
+  function rmCheckpoints(anchor, deadline) {  // month-end dates from anchor's month through the deadline
+    const out = []; let y = anchor.getUTCFullYear(), m = anchor.getUTCMonth();
+    while (true) {
+      const me = rmMonthEnd(y, m);
+      if (me >= deadline) break;
+      out.push(me);
+      if (++m > 11) { m = 0; y++; }
+    }
+    out.push(deadline);
+    return out;
   }
   function renderRoadmap() {
     const g = meta.goal; if (!g) { $("#roadmapCard").classList.add("hidden"); return; }
@@ -1020,10 +1034,13 @@
       .forEach(([l, v, s]) => mh.append(el("div", { class: "rm-metric" }, [el("div", { class: "l" }, l), el("div", { class: "v" }, v), el("div", { class: "s" }, s)])));
 
     const nowKey = rmISO(cur).slice(0, 7);
-    const cps = [["2026-08-31", "Aug"], ["2026-09-30", "Sep"], ["2026-10-31", "Oct"], ["2026-11-30", "Nov"], ["2026-12-31", "Dec"], ["2027-01-21", "Jan 21"]];
+    const cps = rmCheckpoints(anchor, deadline);
     const ch = $("#rmCheckpoints"); ch.innerHTML = "";
-    cps.forEach(([d, label]) => {
-      const td = Math.min(rmTdays(anchor, rmParse(d)), Ntot), val = curveVal(td), done = live >= val, isNow = d.slice(0, 7) === nowKey;
+    cps.forEach(cd => {
+      const isEnd = cd.getTime() === deadline.getTime();
+      const td = Math.min(rmTdays(anchor, cd), Ntot), val = curveVal(td), done = live >= val - 1;
+      const label = cd.toLocaleDateString("en-US", isEnd ? { month: "short", day: "numeric", timeZone: "UTC" } : { month: "short", timeZone: "UTC" });
+      const isNow = rmISO(cd).slice(0, 7) === nowKey;
       ch.append(el("div", { class: "rm-cp " + (done ? "done" : isNow ? "now" : "") }, [
         el("div", { class: "m" }, label),
         el("div", { class: "t" }, kMoney(val)),
@@ -1048,11 +1065,12 @@
     const proj = Math.max(0, live + avgDay * daysLeft);
     svg.append(svgEl("line", { x1: X(elapsed), y1: Y(live), x2: X(Ntot), y2: Y(proj), stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "4 4" }));
     const pl = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(proj) - 5, "text-anchor": "end" }); pl.textContent = "current pace"; svg.append(pl);
-    [["2026-08-31"], ["2026-09-30"], ["2026-10-31"], ["2026-11-30"], ["2026-12-31"], ["2027-01-21"]].forEach(([d]) => { const td = Math.min(rmTdays(anchor, rmParse(d)), Ntot); svg.append(svgEl("circle", { cx: X(td), cy: Y(curveVal(td)), r: 3.5, fill: "var(--accent)", stroke: "var(--surface-1)", "stroke-width": 1.5 })); });
+    const cps = rmCheckpoints(anchor, deadline);
+    cps.forEach(cd => { const td = Math.min(rmTdays(anchor, cd), Ntot); svg.append(svgEl("circle", { cx: X(td), cy: Y(curveVal(td)), r: 3.5, fill: "var(--accent)", stroke: "var(--surface-1)", "stroke-width": 1.5 })); });
     const hx = X(elapsed), hy = Y(live);
     svg.append(svgEl("circle", { cx: hx, cy: hy, r: 5, fill: "var(--win)", stroke: "var(--surface-1)", "stroke-width": 2 }));
     const hl = svgEl("text", { class: "axis-txt", x: hx + 8, y: hy - 6, style: "font-weight:700;fill:var(--win)" }); hl.textContent = "you"; svg.append(hl);
-    [["2026-08-25", "Aug"], ["2026-09-30", "Sep"], ["2026-10-31", "Oct"], ["2026-11-30", "Nov"], ["2026-12-31", "Dec"], ["2027-01-21", "Jan"]].forEach(([d, l]) => { const td = Math.min(rmTdays(anchor, rmParse(d)), Ntot); const t = svgEl("text", { class: "axis-txt", x: X(td), y: H - 8, "text-anchor": "middle" }); t.textContent = l; svg.append(t); });
+    cps.forEach(cd => { const td = Math.min(rmTdays(anchor, cd), Ntot); const t = svgEl("text", { class: "axis-txt", x: X(td), y: H - 8, "text-anchor": "middle" }); t.textContent = cd.toLocaleDateString("en-US", { month: "short", timeZone: "UTC" }); svg.append(t); });
     host.append(svg);
   }
   function wireDiscipline() {

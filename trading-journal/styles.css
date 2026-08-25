@@ -367,8 +367,9 @@ tbody tr:hover { background: var(--surface-2); }
 .rm-metric .l { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
 .rm-metric .v { font-size: 18px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
 .rm-metric .s { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
-.rm-checkpoints { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 14px 0 4px; }
+.rm-checkpoints { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px, 1fr)); gap: 8px; margin: 14px 0 4px; }
 @media (max-width: 620px){ .rm-checkpoints { grid-template-columns: repeat(3, 1fr); } }
+.rm-cp .t { font-size: 14px; }
 .rm-cp { border: 1px solid var(--border); border-radius: 10px; padding: 9px 10px; text-align: center; background: var(--surface-1); }
 .rm-cp.now { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface-1)); }
 .rm-cp.done { border-color: color-mix(in srgb, var(--win) 45%, var(--border)); }
