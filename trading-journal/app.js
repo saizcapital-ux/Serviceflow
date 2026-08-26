@@ -1016,18 +1016,20 @@
     const totalContrib = contribs.reduce((s, c) => s + c.amt, 0);
     const toDate = contribs.filter(c => c.date <= cur).reduce((s, c) => s + c.amt, 0);
     const futureContrib = totalContrib - toDate;
+    const wd = g.dailyWithdrawal || 0;                 // money taken out each trading day
+    const totalWithdraw = wd * Ntot, futureWithdraw = wd * daysLeft;
 
-    // ---- live account value = base + trading P&L + deposits banked so far ----
-    const live = g.anchorEquity + (meta.totalPnl - g.anchorPnl) + toDate;
+    // ---- live account value = base + trading P&L + deposits in − withdrawals out ----
+    const live = g.anchorEquity + (meta.totalPnl - g.anchorPnl) + toDate - wd * elapsed;
     const toGo = target - live, pctDone = Math.max(0, Math.min(1, live / target));
 
-    // ---- solve the trading rate that (with deposits) reaches target ----
-    const simEnd = r => { let v = g.anchorEquity + (byTd[0] || 0); for (let t = 1; t <= Ntot; t++) { v = v * (1 + r) + (byTd[t] || 0); } return v; };
-    let lo = 0, hi = 0.25; for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (simEnd(m) < target) lo = m; else hi = m; }
+    // ---- solve the trading rate that (with deposits and withdrawals) reaches target ----
+    const simEnd = r => { let v = g.anchorEquity + (byTd[0] || 0); for (let t = 1; t <= Ntot; t++) { v = v * (1 + r) + (byTd[t] || 0) - wd; } return v; };
+    let lo = 0, hi = 0.5; for (let i = 0; i < 90; i++) { const m = (lo + hi) / 2; if (simEnd(m) < target) lo = m; else hi = m; }
     const r = (lo + hi) / 2;
-    const path = new Array(Ntot + 1); { let v = g.anchorEquity + (byTd[0] || 0); path[0] = v; for (let t = 1; t <= Ntot; t++) { v = v * (1 + r) + (byTd[t] || 0); path[t] = v; } }
+    const path = new Array(Ntot + 1); { let v = g.anchorEquity + (byTd[0] || 0); path[0] = v; for (let t = 1; t <= Ntot; t++) { v = v * (1 + r) + (byTd[t] || 0) - wd; path[t] = v; } }
     const curveVal = td => { const i = Math.max(0, Math.min(Ntot - 1, Math.floor(td))), f = td - i; return path[i] + (path[i + 1] - path[i]) * f; };
-    const baseVal = td => g.anchorEquity + cum[Math.max(0, Math.min(Ntot, Math.round(td)))];
+    const baseVal = td => { const i = Math.max(0, Math.min(Ntot, Math.round(td))); return g.anchorEquity + cum[i] - wd * i; };  // net external cash, no trading
     const rMonth = Math.pow(1 + r, 21) - 1, rWeek = Math.pow(1 + r, 5) - 1;
     const todayTarget = curveVal(elapsed);
 
@@ -1044,12 +1046,14 @@
     const byDay = new Map(); ALL.forEach(t => byDay.set(t.date, (byDay.get(t.date) || 0) + t.pnl));
     const rdays = [...byDay.entries()].sort((a, b) => a[0] < b[0] ? 1 : -1).slice(0, 20);
     const avgDay = rdays.length ? rdays.reduce((s, d) => s + d[1], 0) / rdays.length : 0;
-    const proj = live + avgDay * daysLeft + futureContrib;
+    const proj = live + avgDay * daysLeft + futureContrib - futureWithdraw;
 
     const mh = $("#rmMetrics"); mh.innerHTML = "";
-    [["Trade / day", pct(r), "compounded"], ["Trade / month", pct(rMonth), ""],
-     ["Deposits", "+" + kMoney(totalContrib), "incl. $9k May bonus"], ["Your pace", moneyS(avgDay) + "/day", `≈ ${pct(avgDay * 21 / live)} /mo`]]
-      .forEach(([l, v, s]) => mh.append(el("div", { class: "rm-metric" }, [el("div", { class: "l" }, l), el("div", { class: "v" }, v), el("div", { class: "s" }, s)])));
+    const metricRows = [["Trade / day", pct(r), "compounded"], ["Trade / month", pct(rMonth), ""],
+      ["Deposits", "+" + kMoney(totalContrib), "incl. $9k May bonus"]];
+    if (wd > 0) metricRows.push(["Withdrawals", "−" + kMoney(totalWithdraw), `$${wd}/trading day`]);
+    metricRows.push(["Your pace", moneyS(avgDay) + "/day", `≈ ${pct(avgDay * 21 / live)} /mo`]);
+    metricRows.forEach(([l, v, s]) => mh.append(el("div", { class: "rm-metric" }, [el("div", { class: "l" }, l), el("div", { class: "v" }, v), el("div", { class: "s" }, s)])));
 
     const nowKey = rmISO(cur).slice(0, 7);
     const cps = rmCheckpoints(anchor, deadline);
@@ -1066,12 +1070,15 @@
       ]));
     });
 
-    drawRoadmapChart({ anchor, deadline, Ntot, elapsed, live, target, curveVal, baseVal, avgDay, daysLeft, futureContrib });
+    drawRoadmapChart({ anchor, deadline, Ntot, elapsed, live, target, curveVal, baseVal, avgDay, daysLeft, futureContrib, futureWithdraw, wd });
     const yourMonthly = avgDay * 21 / live;
-    $("#rmNote").innerHTML = `Account value = your ${bigMoney(g.anchorEquity)} base + realized-P&L growth + deposits banked so far (auto-advances each refresh). Your <b>${kMoney(totalContrib)} of deposits</b> (incl. the $9k May bonus) do part of the climb — alone they'd reach <b>${bigMoney(g.anchorEquity + totalContrib)}</b> (dotted line), so trading only supplies the rest at <b>${pct(r)}/day (${pct(rMonth)}/mo)</b> — and you're <i>already</i> trading ≈ <b>${pct(yourMonthly)}/mo</b>. The catch is <b>compounding</b>: hold that % as the account grows (bigger size on a bigger base) and you clear the curve; keep sizing flat at ${moneyS(avgDay)}/day and you stall near <b>${bigMoney(proj)}</b>. Informational, not investment advice.`;
+    const flowClause = wd > 0
+      ? `Your deposits (${kMoney(totalContrib)}, incl. the $9k May bonus) minus your ${moneyS(-wd)}/day withdrawals net to <b>${bigMoney(g.anchorEquity + totalContrib - totalWithdraw)}</b> of outside cash (dotted line)`
+      : `Your ${kMoney(totalContrib)} of deposits (incl. the $9k May bonus) reach <b>${bigMoney(g.anchorEquity + totalContrib)}</b> on their own (dotted line)`;
+    $("#rmNote").innerHTML = `Account value = your ${bigMoney(g.anchorEquity)} base + realized-P&L growth + deposits in − withdrawals out (auto-advances each refresh). ${flowClause}, so trading supplies the rest at <b>${pct(r)}/day (${pct(rMonth)}/mo)</b> — vs your current ≈ <b>${pct(yourMonthly)}/mo</b>. The catch is <b>compounding</b>: hold that % as the account grows and you clear the curve; keep sizing flat at ${moneyS(avgDay)}/day and you stall near <b>${bigMoney(proj)}</b>. Withdrawals are a $50/day placeholder — tell me the real figure. Informational, not investment advice.`;
   }
   function drawRoadmapChart(c) {
-    const { anchor, deadline, Ntot, elapsed, live, target, curveVal, baseVal, avgDay, daysLeft, futureContrib } = c;
+    const { anchor, deadline, Ntot, elapsed, live, target, curveVal, baseVal, avgDay, daysLeft, futureContrib, futureWithdraw, wd } = c;
     const host = $("#rmChart"); host.innerHTML = "";
     const W = 920, H = 230, P = { t: 14, r: 16, b: 26, l: 54 };
     const iw = W - P.l - P.r, ih = H - P.t - P.b, ymax = target * 1.03;
@@ -1085,9 +1092,9 @@
     // deposits-only baseline (dotted)
     let bp = ""; for (let t = 0; t <= Ntot; t++) { bp += (t ? "L" : "M") + X(t).toFixed(1) + "," + Y(baseVal(t)).toFixed(1); }
     svg.append(svgEl("path", { d: bp, fill: "none", stroke: "var(--text-secondary)", "stroke-width": 1.4, "stroke-dasharray": "2 3", opacity: 0.7 }));
-    svg.append((() => { const t = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(baseVal(Ntot)) - 5, "text-anchor": "end" }); t.textContent = "deposits only"; return t; })());
-    // current-pace projection (trading pace + remaining deposits)
-    const proj = Math.max(0, live + avgDay * daysLeft + futureContrib);
+    svg.append((() => { const t = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(baseVal(Ntot)) - 5, "text-anchor": "end" }); t.textContent = wd > 0 ? "net cash flows" : "deposits only"; return t; })());
+    // current-pace projection (trading pace + remaining deposits − remaining withdrawals)
+    const proj = Math.max(0, live + avgDay * daysLeft + futureContrib - futureWithdraw);
     svg.append(svgEl("line", { x1: X(elapsed), y1: Y(live), x2: X(Ntot), y2: Y(proj), stroke: "var(--muted)", "stroke-width": 1.5, "stroke-dasharray": "4 4" }));
     svg.append((() => { const t = svgEl("text", { class: "axis-txt", x: X(Ntot) - 3, y: Y(proj) - 5, "text-anchor": "end" }); t.textContent = "current pace"; return t; })());
     // milestone dots + you
