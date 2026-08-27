@@ -189,8 +189,36 @@ if barstate.islast
     if showVP
         pocLn := line.new(anchorBar, poc, bar_index + 2, poc, color=color.new(#e0a53c, 0), width=1, style=line.style_dotted)
 
-vpBull = not na(poc) and close > poc
-vpBear = not na(poc) and close < poc
+// Running POC — accumulated every bar since the anchor, so the Volume-Profile
+// bias is valid on ALL bars (not just the last). This is what lets the strict
+// CALLS/PUTS labels actually print across history and fire live.
+pocStep = math.max(syminfo.mintick, nz(atr, syminfo.mintick * 20) * 0.05)
+var float[] rpLvl = array.new_float()
+var float[] rpVol = array.new_float()
+if ta.change(anchorBar) != 0
+    array.clear(rpLvl)
+    array.clear(rpVol)
+tpx = (high + low + close) / 3
+lvlx = math.round(tpx / pocStep) * pocStep
+ixx = array.indexof(rpLvl, lvlx)
+if ixx == -1
+    array.push(rpLvl, lvlx)
+    array.push(rpVol, volume)
+else
+    array.set(rpVol, ixx, array.get(rpVol, ixx) + volume)
+float pocLive = na
+if array.size(rpVol) > 0
+    mi = 0
+    mv = array.get(rpVol, 0)
+    for i = 1 to array.size(rpVol) - 1
+        v = array.get(rpVol, i)
+        if v > mv
+            mv := v
+            mi := i
+    pocLive := array.get(rpLvl, mi)
+
+vpBull = not na(pocLive) and close > pocLive
+vpBear = not na(pocLive) and close < pocLive
 
 // --------------------------------------------------- Support/reclaim tests --
 atSupport    = math.abs(close - support) <= atr * nearMult
@@ -278,7 +306,7 @@ if barstate.islast
     verdict = inNT ? "NO-TRADE · 12–1pm" : (((isLong?takeLong:takeShort)) ? "TAKE " + dirTxt : (dTrig ? "close — wait 4/6" : "WAIT for trigger"))
     vcol    = inNT ? color.new(#e8635b, 0) : (((isLong?takeLong:takeShort)) ? dcol : color.new(muted, 0))
     f_row(8, "VERDICT", verdict, vcol)
-    f_row(9,  "POC", na(poc) ? "—" : str.tostring(poc, format.mintick), color.new(#e0a53c, 0))
+    f_row(9,  "POC", na(pocLive) ? "—" : str.tostring(pocLive, format.mintick), color.new(#e0a53c, 0))
     f_row(10, "VWAP", str.tostring(vwap, format.mintick), color.new(#9085e9, 0))
     f_row(11, "Regime", regimeTxt + " · ADX " + str.tostring(math.round(adx)), trendDay ? color.new(#26c85c, 0) : color.new(#e0a53c, 0))
     f_row(12, "Max size / R:R", sizeTxt + "  ·  " + str.tostring(dRR, "#.0") + ":1", color.white)
