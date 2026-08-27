@@ -271,8 +271,13 @@ fullBull = emaBull and aboveVWAP and vpBull and not inNT and (not needCross or e
 fullBear = emaBear and belowVWAP and vpBear and not inNT and (not needCross or emaCrossDn)
 callsSig = showCalls and fullBull and (markEveryBar or not fullBull[1])
 putsSig  = showPuts  and fullBear and (markEveryBar or not fullBear[1])
-plotshape(callsSig, "CALLS — 3/3 bullish", shape.labelup,   location.belowbar, color=color.new(#14c784, 0), textcolor=color.white, text="CALLS", size=size.normal)
-plotshape(putsSig,  "PUTS — 3/3 bearish",  shape.labeldown, location.abovebar, color=color.new(#e8635b, 0), textcolor=color.white, text="PUTS",  size=size.normal)
+// CALLS = bullish → green label BELOW the bar (buy side, pointer up).
+// PUTS  = bearish → red label ABOVE the bar (sell side, pointer down).
+// yloc.belowbar / abovebar keep them off the candles so price stays clear.
+if callsSig
+    label.new(bar_index, na, "CALLS", yloc=yloc.belowbar, style=label.style_label_up,   color=color.new(#14c784, 0), textcolor=color.white, size=size.normal)
+if putsSig
+    label.new(bar_index, na, "PUTS",  yloc=yloc.abovebar, style=label.style_label_down, color=color.new(#e8635b, 0), textcolor=color.white, size=size.normal)
 alertcondition(callsSig, "CALLS — 3 of 3 bullish", "CALLS on {{ticker}} {{interval}} — 8>21 EMA, price>VWAP, above POC")
 alertcondition(putsSig,  "PUTS — 3 of 3 bearish",  "PUTS on {{ticker}} {{interval}} — 8<21 EMA, price<VWAP, below POC")
 
