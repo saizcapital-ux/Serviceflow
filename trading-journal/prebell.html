@@ -1,0 +1,379 @@
+<title>Pre-Bell Card</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    color-scheme: light;
+    --ground:      #eef1ee;
+    --panel:       #ffffff;
+    --panel-2:     #f6f8f6;
+    --ink:         #14201b;
+    --ink-2:       #47554e;
+    --muted:       #8b968f;
+    --line:        rgba(20,32,27,0.11);
+    --line-strong: rgba(20,32,27,0.20);
+    --go:          #1c7a58;   /* discipline / keep */
+    --go-soft:     rgba(28,122,88,0.10);
+    --stop:        #bd5136;   /* caution / halt */
+    --stop-soft:   rgba(189,81,54,0.10);
+    --shadow:      0 1px 2px rgba(20,32,27,0.05), 0 10px 34px -18px rgba(20,32,27,0.30);
+    --tape:        repeating-linear-gradient(-45deg, transparent 0 9px, rgba(189,81,54,0.10) 9px 18px);
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      color-scheme: dark;
+      --ground:      #0d1310;
+      --panel:       #141c18;
+      --panel-2:     #101713;
+      --ink:         #eaf0ec;
+      --ink-2:       #a3afa8;
+      --muted:       #6d7a72;
+      --line:        rgba(234,240,236,0.10);
+      --line-strong: rgba(234,240,236,0.18);
+      --go:          #4fb992;
+      --go-soft:     rgba(79,185,146,0.13);
+      --stop:        #e07c5f;
+      --stop-soft:   rgba(224,124,95,0.13);
+      --shadow:      0 1px 2px rgba(0,0,0,0.4), 0 14px 40px -20px rgba(0,0,0,0.7);
+      --tape:        repeating-linear-gradient(-45deg, transparent 0 9px, rgba(224,124,95,0.13) 9px 18px);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground:      #0d1310;
+    --panel:       #141c18;
+    --panel-2:     #101713;
+    --ink:         #eaf0ec;
+    --ink-2:       #a3afa8;
+    --muted:       #6d7a72;
+    --line:        rgba(234,240,236,0.10);
+    --line-strong: rgba(234,240,236,0.18);
+    --go:          #4fb992;
+    --go-soft:     rgba(79,185,146,0.13);
+    --stop:        #e07c5f;
+    --stop-soft:   rgba(224,124,95,0.13);
+    --shadow:      0 1px 2px rgba(0,0,0,0.4), 0 14px 40px -20px rgba(0,0,0,0.7);
+    --tape:        repeating-linear-gradient(-45deg, transparent 0 9px, rgba(224,124,95,0.13) 9px 18px);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding: clamp(16px, 4vw, 48px) 16px;
+    display: flex;
+    justify-content: center;
+  }
+  .card {
+    width: 100%;
+    max-width: 600px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    animation: rise .5s cubic-bezier(.2,.7,.3,1) both;
+  }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .card { animation: none; } }
+
+  /* ---- header ---- */
+  .head {
+    padding: 22px clamp(20px, 5vw, 34px) 20px;
+    border-bottom: 1px solid var(--line);
+    background:
+      linear-gradient(var(--panel), var(--panel)) padding-box,
+      var(--panel-2);
+    position: relative;
+  }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--go);
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0 0 12px;
+  }
+  .eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--go); box-shadow: 0 0 0 4px var(--go-soft); }
+  .eyebrow .date { color: var(--muted); margin-left: auto; letter-spacing: 0.08em; }
+  h1 {
+    font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", sans-serif;
+    font-weight: 700;
+    font-size: clamp(30px, 8vw, 42px);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .mantra {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13.5px;
+    color: var(--ink-2);
+    margin: 12px 0 0;
+    letter-spacing: 0.01em;
+  }
+  .mantra b { color: var(--ink); font-weight: 600; }
+
+  /* ---- generic section ---- */
+  section { padding: 22px clamp(20px, 5vw, 34px); border-bottom: 1px solid var(--line); }
+  .lbl {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 14px;
+  }
+  .edit { cursor: text; border-radius: 5px; transition: background .15s, box-shadow .15s; }
+  .edit:hover { background: var(--go-soft); }
+  .edit:focus { outline: none; background: var(--panel); box-shadow: 0 0 0 2px var(--go); }
+
+  /* ---- names ---- */
+  .names { display: flex; gap: 14px; flex-wrap: wrap; }
+  .name {
+    flex: 1 1 0; min-width: 150px;
+    border: 1px solid var(--line-strong); border-radius: 12px;
+    padding: 14px 16px; background: var(--panel-2);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .name .tag { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .name .ticker {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 700;
+    font-size: clamp(26px, 7vw, 34px); letter-spacing: 0.01em; color: var(--ink);
+  }
+  .name.primary { border-color: color-mix(in srgb, var(--go) 45%, var(--line-strong)); }
+  .name.primary .tag { color: var(--go); }
+
+  /* ---- three numbers ---- */
+  .nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  @media (max-width: 460px) { .nums { grid-template-columns: 1fr; } }
+  .num {
+    border: 1px solid var(--line-strong); border-radius: 12px; padding: 14px 14px 12px;
+    background: var(--panel-2); display: flex; flex-direction: column; gap: 6px;
+    position: relative;
+  }
+  .num .cap { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); line-height: 1.3; }
+  .num .fig {
+    font-family: "IBM Plex Mono", monospace; font-weight: 600;
+    font-size: clamp(24px, 6.5vw, 30px); font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+  .num.stop { background: var(--stop-soft); border-color: color-mix(in srgb, var(--stop) 34%, var(--line-strong)); }
+  .num.stop .fig { color: var(--stop); }
+  .num.green { background: var(--go-soft); border-color: color-mix(in srgb, var(--go) 34%, var(--line-strong)); }
+  .num.green .fig { color: var(--go); }
+  .num.cap .fig { color: var(--ink); }
+
+  /* ---- no-trade band ---- */
+  .notrade {
+    display: flex; align-items: center; gap: 16px;
+    border: 1px solid color-mix(in srgb, var(--stop) 40%, var(--line)); border-radius: 12px;
+    padding: 15px 18px; background: var(--stop-soft); position: relative; overflow: hidden;
+  }
+  .notrade::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 100%; background: var(--tape); opacity: .5; pointer-events: none; }
+  .notrade .body { position: relative; }
+  .notrade .hh {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 700;
+    font-size: clamp(19px, 5vw, 23px); color: var(--stop); letter-spacing: 0; margin: 0;
+  }
+  .notrade .sub { font-size: 13px; color: var(--ink-2); margin: 3px 0 0; position: relative; }
+  .notrade .octagon {
+    position: relative; flex: 0 0 auto;
+    width: 54px; height: 54px; display: grid; place-items: center;
+    color: #fff; background: var(--stop);
+    clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 700; font-size: 12px;
+    letter-spacing: 0.04em; text-align: center; line-height: 1;
+  }
+
+  /* ---- checklist ---- */
+  ul.check { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  li.item {
+    display: flex; gap: 13px; align-items: flex-start;
+    padding: 11px 10px; border-radius: 10px; cursor: pointer;
+    transition: background .14s; user-select: none;
+  }
+  li.item:hover { background: var(--panel-2); }
+  li.item:focus-visible { outline: 2px solid var(--go); outline-offset: 1px; }
+  .box {
+    flex: 0 0 auto; width: 22px; height: 22px; margin-top: 1px;
+    border: 1.8px solid var(--line-strong); border-radius: 6px;
+    display: grid; place-items: center; transition: background .16s, border-color .16s;
+    background: var(--panel);
+  }
+  .box svg { width: 13px; height: 13px; stroke: #fff; stroke-width: 3.2; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 24; stroke-dashoffset: 25; transition: stroke-dashoffset .22s ease; }
+  li.done .box { background: var(--go); border-color: var(--go); }
+  li.done .box svg { stroke-dashoffset: 0; }
+  @media (prefers-reduced-motion: reduce) { .box svg { transition: none; } }
+  .item .txt { font-size: 15px; color: var(--ink); line-height: 1.4; }
+  .item .txt small { display: block; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--muted); margin-top: 2px; letter-spacing: 0.01em; }
+  li.done .txt { color: var(--ink-2); }
+  li.done .txt b, li.done .txt { text-decoration: none; }
+
+  /* ---- record strip ---- */
+  .record { background: var(--panel-2); border-bottom: none; }
+  .record .lbl { color: var(--muted); }
+  .facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+  @media (max-width: 460px) { .facts { grid-template-columns: 1fr; } }
+  .fact { display: flex; gap: 10px; align-items: baseline; font-size: 13px; color: var(--ink-2); }
+  .fact .v { font-family: "IBM Plex Mono", monospace; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+  .fact .v.neg { color: var(--stop); }
+  .fact .v.pos { color: var(--go); }
+
+  /* ---- footer ---- */
+  .foot { display: flex; align-items: center; gap: 12px; padding: 16px clamp(20px, 5vw, 34px); }
+  .reset {
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.04em;
+    color: var(--ink-2); background: var(--panel-2); border: 1px solid var(--line-strong);
+    padding: 8px 14px; border-radius: 8px; cursor: pointer; transition: background .14s, color .14s;
+  }
+  .reset:hover { background: var(--go-soft); color: var(--go); border-color: var(--go); }
+  .reset:focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+  .foot .note { font-size: 11.5px; color: var(--muted); margin-left: auto; text-align: right; line-height: 1.4; }
+  .hintbar { font-size: 11.5px; color: var(--muted); font-family: "IBM Plex Mono", monospace; padding: 0 clamp(20px,5vw,34px) 18px; letter-spacing: 0.01em; }
+</style>
+
+<div class="card" id="card">
+  <header class="head">
+    <p class="eyebrow"><span class="dot"></span> Pre-Market Card <span class="date" id="today">—</span></p>
+    <h1>Before the bell.</h1>
+    <p class="mantra"><b>Do less.</b> Fewer names. <b>Stop on time.</b></p>
+  </header>
+
+  <section>
+    <p class="lbl">Today's names — only these exist</p>
+    <div class="names">
+      <div class="name primary">
+        <span class="tag">Primary</span>
+        <span class="ticker edit" contenteditable="true" data-k="primary" spellcheck="false">COIN</span>
+      </div>
+      <div class="name">
+        <span class="tag">Backup</span>
+        <span class="ticker edit" contenteditable="true" data-k="backup" spellcheck="false">META</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="lbl">The three numbers</p>
+    <div class="nums">
+      <div class="num stop">
+        <span class="cap">Stop-trading loss</span>
+        <span class="fig edit" contenteditable="true" data-k="stop" spellcheck="false">−$150</span>
+      </div>
+      <div class="num green">
+        <span class="cap">Green &amp; done</span>
+        <span class="fig edit" contenteditable="true" data-k="green" spellcheck="false">+$200</span>
+      </div>
+      <div class="num cap">
+        <span class="cap">Max trades</span>
+        <span class="fig edit" contenteditable="true" data-k="max" spellcheck="false">6</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="lbl">No-trade hour</p>
+    <div class="notrade">
+      <div class="octagon">HANDS<br>OFF</div>
+      <div class="body">
+        <p class="hh">12:00 – 1:00 PM ET</p>
+        <p class="sub">Your worst hour by far — <b>−$4,733</b> lifetime. Alarm at 11:55. Walk away.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <p class="lbl">Before the bell</p>
+    <ul class="check" id="check">
+      <li class="item" tabindex="0"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="txt">Named my 1–2 tickers — nothing else exists today.</span></li>
+      <li class="item" tabindex="0"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="txt">My three numbers are written where I can see them.</span></li>
+      <li class="item" tabindex="0"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="txt">Set the 11:55 AM alarm — hands off 12–1 PM ET.</span></li>
+      <li class="item" tabindex="0"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="txt">Checked my headspace.<small>Work heavy? Size down to 1 — or sit the day out.</small></span></li>
+      <li class="item" tabindex="0"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="txt">Size stays 1–5 contracts. No exceptions.</span></li>
+      <li class="item" tabindex="0"><span class="box"><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg></span><span class="txt">Green &amp; done or max trades hit → <b>close the laptop.</b></span></li>
+    </ul>
+  </section>
+
+  <section class="record">
+    <p class="lbl">Why this works — from your own record</p>
+    <div class="facts">
+      <div class="fact"><span class="v pos">mornings</span> <span>are where your edge lives — bank them.</span></div>
+      <div class="fact"><span class="v neg">−$4,733</span> <span>the 12–1 PM ET hour, all-time.</span></div>
+      <div class="fact"><span class="v">9 names</span> <span>= your worst, most confused day.</span></div>
+      <div class="fact"><span class="v pos">+$426</span> <span>career flips green just by capping size at 3.</span></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <button class="reset" id="reset" type="button">New session ↺</button>
+    <span class="note">Saves in this browser.<br>Checks reset each new day.</span>
+  </div>
+  <p class="hintbar">Tap any ticker or number to edit it — your card, your rules.</p>
+</div>
+
+<script>
+(function () {
+  var KEY = "prebell.v1";
+  var todayKey = new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
+
+  // header date
+  try {
+    document.getElementById("today").textContent =
+      new Date().toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "short", month: "short", day: "numeric" });
+  } catch (e) {}
+
+  function load() {
+    try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+  }
+  function save(s) {
+    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {}
+  }
+
+  var state = load();
+  // new day → clear the day's checks, keep names & numbers
+  if (state.date !== todayKey) { state.checks = []; state.date = todayKey; save(state); }
+
+  // restore editable fields
+  var edits = document.querySelectorAll(".edit");
+  edits.forEach(function (el) {
+    var k = el.getAttribute("data-k");
+    if (state[k] != null && state[k] !== "") el.textContent = state[k];
+    el.addEventListener("blur", function () {
+      var v = el.textContent.replace(/\s+/g, " ").trim();
+      if (v === "") { v = el.getAttribute("data-k") === "max" ? "—" : "—"; el.textContent = v; }
+      state[k] = v; save(state);
+    });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); el.blur(); }
+    });
+  });
+
+  // checklist
+  var items = Array.prototype.slice.call(document.querySelectorAll("#check .item"));
+  var checks = Array.isArray(state.checks) ? state.checks : [];
+  function paint() { items.forEach(function (li, i) { li.classList.toggle("done", !!checks[i]); }); }
+  function toggle(i) { checks[i] = !checks[i]; state.checks = checks; save(state); paint(); }
+  items.forEach(function (li, i) {
+    li.addEventListener("click", function () { toggle(i); });
+    li.addEventListener("keydown", function (e) {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(i); }
+    });
+  });
+  paint();
+
+  document.getElementById("reset").addEventListener("click", function () {
+    checks = []; state.checks = []; save(state); paint();
+  });
+})();
+</script>
