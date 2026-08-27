@@ -210,11 +210,12 @@ float pocLive = na
 if array.size(rpVol) > 0
     mi = 0
     mv = array.get(rpVol, 0)
-    for i = 1 to array.size(rpVol) - 1
-        v = array.get(rpVol, i)
-        if v > mv
-            mv := v
-            mi := i
+    if array.size(rpVol) > 1
+        for i = 1 to array.size(rpVol) - 1
+            v = array.get(rpVol, i)
+            if v > mv
+                mv := v
+                mi := i
     pocLive := array.get(rpLvl, mi)
 
 vpBull = not na(pocLive) and close > pocLive
