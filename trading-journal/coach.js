@@ -2,7 +2,7 @@
    Regenerate against fresh data with:  python ai_coach.py
    Figures are informational only, not tax or investment advice. */
 window.COACH = {
-  generatedAt: "2026-08-20",
+  generatedAt: "2026-08-27",
   model: "claude-opus-4-8",
   grade: "Down lifetime — but 2026 is green and you're still turning it",
   verdict:
@@ -36,5 +36,5 @@ window.COACH = {
     "Recognizing and correcting a two-year blow-up era is the hardest thing a trader does — and you did it.",
   ],
   note:
-    "Grounded in your complete realized-trade history, Jan 2024 → Aug 19 2026. A behavioral read of your own data, not investment advice — validate every rule against your own results before trading it.",
+    "Grounded in your complete realized-trade history, Jan 2024 → Aug 27 2026. A behavioral read of your own data, not investment advice — validate every rule against your own results before trading it.",
 };
