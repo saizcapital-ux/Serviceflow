@@ -4,7 +4,7 @@
 //  Built from your own trading record.
 //
 //  Four signals, read together, for a LONG or SHORT:
-//    1) 9/21 EMA cross ............ trigger (▲ bull cross / ▼ bear cross)
+//    1) 8/21 EMA cross ............ trigger (▲ bull cross / ▼ bear cross)
 //    2) Auto-anchored Volume Profile  bias .... price above POC = bullish,
 //       (session or last-swing anchor)          below POC = bearish
 //    3) VWAP position ............. above = long bias, below = short bias
@@ -296,7 +296,7 @@ if barstate.islast
     dcol = isLong ? color.new(#26c85c, 0) : color.new(#e8635b, 0)
     table.cell(t, 0, 0, "RECLAIM PLAYBOOK", text_size=size.normal, text_color=#e0a53c, text_halign=text.align_left, bgcolor=panel)
     table.cell(t, 1, 0, dirTxt, text_size=size.normal, text_color=dcol, text_halign=text.align_right, bgcolor=panel)
-    f_row(1, "1 · 9/21 EMA",   isLong ? (emaBull?"bull":"·") : (emaBear?"bear":"·"), mkc(isLong?emaBull:emaBear))
+    f_row(1, "1 · 8/21 EMA",   isLong ? (emaBull?"bull":"·") : (emaBear?"bear":"·"), mkc(isLong?emaBull:emaBear))
     f_row(2, "2 · Vol Profile", isLong ? (vpBull?"> POC":"·") : (vpBear?"< POC":"·"), mkc(isLong?vpBull:vpBear))
     f_row(3, "3 · VWAP",       isLong ? (aboveVWAP?"above":"·") : (belowVWAP?"below":"·"), mkc(isLong?aboveVWAP:belowVWAP))
     f_row(4, "4 · At S/R",     mk(isLong?(atSupport or reclaimLong):(atResistance or rejectShort)), mkc(isLong?(atSupport or reclaimLong):(atResistance or rejectShort)))
