@@ -11,6 +11,10 @@
 //    4) Support / Resistance ...... auto pivots; entry AT the level
 //  + volume spike + reward:risk complete a 6-point checklist (need 4/6).
 //
+//  STRICT GATE (⑥): a green "CALLS" label prints only when EMA + VWAP + Volume
+//  Profile are ALL bullish (red "PUTS" when all bearish). Toggle each with a
+//  checkbox. This is the pure 3-of-3 signal for your 2-min entries.
+//
 //  Also: 12–1pm ET shaded red and force-locked to NO-TRADE.
 //  Use: Pine Editor → paste → Add to chart. Best on 1–5 min, ride-list names.
 // ============================================================================
@@ -18,7 +22,7 @@ indicator("The Reclaim Playbook", "RECLAIM", overlay=true, max_lines_count=500, 
 
 // ---------------------------------------------------------------- Inputs ----
 gT = "① Triggers — EMA / VWAP"
-emaFastLen = input.int(9,  "Fast EMA", minval=1, group=gT)
+emaFastLen = input.int(8,  "Fast EMA", minval=1, group=gT)
 emaSlowLen = input.int(21, "Slow EMA", minval=1, group=gT)
 useVWAP    = input.bool(true, "Use VWAP position as a signal", group=gT)
 
@@ -42,6 +46,12 @@ gX = "⑤ No-trade window"
 useNoTrade = input.bool(true, "Block 12–1pm ET", group=gX)
 ntSession  = input.session("1200-1300", "Window (HHMM-HHMM)", group=gX)
 ntTZ       = input.string("America/New_York", "Timezone", group=gX)
+
+gG = "⑥ Simple CALLS / PUTS  (strict 3-of-3, your 2-min gate)"
+showCalls   = input.bool(true, "✔ CALLS signal — EMA + VWAP + Profile ALL bullish", group=gG)
+showPuts    = input.bool(true, "✔ PUTS signal — EMA + VWAP + Profile ALL bearish", group=gG)
+markEveryBar= input.bool(false, "Mark every aligned bar (off = only the first)", group=gG)
+needCross   = input.bool(false, "Require a fresh EMA cross on the signal bar", group=gG)
 
 // ------------------------------------------------------------ Core calcs ----
 atr     = ta.atr(14)
@@ -221,6 +231,21 @@ plotchar(emaCrossUp and not takeLong,  "EMA cross up",   "△", location.belowba
 plotchar(emaCrossDn and not takeShort, "EMA cross down", "▽", location.abovebar, color=color.new(#e8635b, 45), size=size.tiny)
 alertcondition(takeLong,  "Long confluence (≥4/6)",  "RECLAIM LONG on {{ticker}} — 4/6, EMA/VWAP/VP aligned")
 alertcondition(takeShort, "Short confluence (≥4/6)", "RECLAIM SHORT on {{ticker}} — 4/6, EMA/VWAP/VP aligned")
+
+// ------------------ Strict 3-of-3 CALLS / PUTS  (the pure confluence gate) ---
+// Fires only when ALL THREE core signals agree: 8/21 EMA, VWAP, Volume Profile.
+// This is the "everything is green → go for calls" trigger you asked for.
+// Note: the Volume-Profile bias is evaluated on the live (developing) bar, so
+// CALLS/PUTS labels and alerts print in real time on your entry chart. Add this
+// indicator to the 2-min chart you enter on.
+fullBull = emaBull and aboveVWAP and vpBull and not inNT and (not needCross or emaCrossUp)
+fullBear = emaBear and belowVWAP and vpBear and not inNT and (not needCross or emaCrossDn)
+callsSig = showCalls and fullBull and (markEveryBar or not fullBull[1])
+putsSig  = showPuts  and fullBear and (markEveryBar or not fullBear[1])
+plotshape(callsSig, "CALLS — 3/3 bullish", shape.labelup,   location.belowbar, color=color.new(#14c784, 0), textcolor=color.white, text="CALLS", size=size.normal)
+plotshape(putsSig,  "PUTS — 3/3 bearish",  shape.labeldown, location.abovebar, color=color.new(#e8635b, 0), textcolor=color.white, text="PUTS",  size=size.normal)
+alertcondition(callsSig, "CALLS — 3 of 3 bullish", "CALLS on {{ticker}} {{interval}} — 8>21 EMA, price>VWAP, above POC")
+alertcondition(putsSig,  "PUTS — 3 of 3 bearish",  "PUTS on {{ticker}} {{interval}} — 8<21 EMA, price<VWAP, below POC")
 
 // ----------------------------------------------------- Dashboard table ------
 isLong  = longChecks >= shortChecks
