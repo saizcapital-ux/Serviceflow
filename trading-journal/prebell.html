@@ -220,6 +220,48 @@
   li.done .txt { color: var(--ink-2); }
   li.done .txt b, li.done .txt { text-decoration: none; }
 
+  /* ---- confluence check ---- */
+  .conf { display: flex; flex-direction: column; gap: 8px; }
+  .sig {
+    display: flex; align-items: center; gap: 12px;
+    border: 1px solid var(--line-strong); border-radius: 11px;
+    padding: 11px 12px 11px 15px; background: var(--panel-2);
+  }
+  .sig-name { flex: 1; font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 600; font-size: 16px; letter-spacing: 0.005em; }
+  .sig-name small { display: block; font-family: "IBM Plex Mono", monospace; font-weight: 400; font-size: 10.5px; letter-spacing: 0.03em; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+  .votes { display: flex; gap: 7px; flex: 0 0 auto; }
+  .vote {
+    width: 46px; height: 40px; border-radius: 9px; cursor: pointer;
+    border: 1.6px solid var(--line-strong); background: var(--panel);
+    color: var(--muted); font-size: 16px; line-height: 1;
+    display: grid; place-items: center; transition: transform .1s, background .14s, color .14s, border-color .14s;
+    font-family: "IBM Plex Mono", monospace;
+  }
+  .vote:hover { border-color: var(--ink-2); color: var(--ink-2); }
+  .vote:active { transform: scale(.94); }
+  .vote:focus-visible { outline: 2px solid var(--go); outline-offset: 2px; }
+  .vote.bull.on { background: var(--go); border-color: var(--go); color: #fff; }
+  .vote.bear.on { background: var(--stop); border-color: var(--stop); color: #fff; }
+
+  .verdict {
+    margin-top: 14px; border-radius: 12px; padding: 16px 18px;
+    border: 1px solid var(--line-strong); background: var(--panel-2);
+    display: flex; flex-direction: column; gap: 3px; transition: background .18s, border-color .18s;
+  }
+  .verdict .v-tag {
+    font-family: "IBM Plex Sans Condensed", sans-serif; font-weight: 700;
+    font-size: clamp(21px, 6vw, 26px); letter-spacing: 0.01em; color: var(--ink-2);
+  }
+  .verdict .v-sub { font-family: "IBM Plex Mono", monospace; font-size: 12.5px; color: var(--muted); letter-spacing: 0.01em; }
+  .verdict.go { background: var(--go-soft); border-color: color-mix(in srgb, var(--go) 45%, var(--line)); }
+  .verdict.go .v-tag { color: var(--go); }
+  .verdict.go .v-sub { color: color-mix(in srgb, var(--go) 72%, var(--ink-2)); }
+  .verdict.halt { background: var(--stop-soft); border-color: color-mix(in srgb, var(--stop) 45%, var(--line)); }
+  .verdict.halt .v-tag { color: var(--stop); }
+  .verdict.halt .v-sub { color: color-mix(in srgb, var(--stop) 72%, var(--ink-2)); }
+  .conf-note { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; line-height: 1.55; color: var(--muted); margin: 12px 0 0; letter-spacing: 0.01em; }
+  .conf-note b { color: var(--ink-2); font-weight: 600; }
+
   /* ---- record strip ---- */
   .record { background: var(--panel-2); border-bottom: none; }
   .record .lbl { color: var(--muted); }
@@ -291,6 +333,38 @@
         <p class="sub">Your worst hour by far — <b>−$4,733</b> lifetime. Alarm at 11:55. Walk away.</p>
       </div>
     </div>
+  </section>
+
+  <section>
+    <p class="lbl">Confluence check — before every entry</p>
+    <div class="conf" id="conf">
+      <div class="sig" data-s="ema">
+        <span class="sig-name">8 / 21 EMA<small>Green crosses yellow</small></span>
+        <div class="votes">
+          <button class="vote bull" data-v="bull" type="button" aria-label="EMA bullish (8 above 21)">▲</button>
+          <button class="vote bear" data-v="bear" type="button" aria-label="EMA bearish (8 below 21)">▼</button>
+        </div>
+      </div>
+      <div class="sig" data-s="vwap">
+        <span class="sig-name">VWAP<small>Price vs the blue line</small></span>
+        <div class="votes">
+          <button class="vote bull" data-v="bull" type="button" aria-label="Price above VWAP">▲</button>
+          <button class="vote bear" data-v="bear" type="button" aria-label="Price below VWAP">▼</button>
+        </div>
+      </div>
+      <div class="sig" data-s="vp">
+        <span class="sig-name">Volume Profile<small>Auto-anchored · above / below value</small></span>
+        <div class="votes">
+          <button class="vote bull" data-v="bull" type="button" aria-label="Volume profile bullish">▲</button>
+          <button class="vote bear" data-v="bear" type="button" aria-label="Volume profile bearish">▼</button>
+        </div>
+      </div>
+    </div>
+    <div class="verdict idle" id="verdict">
+      <span class="v-tag" id="vTag">Set all three</span>
+      <span class="v-sub" id="vSub">Tap ▲ or ▼ for each signal.</span>
+    </div>
+    <p class="conf-note"><b>All three agree → take it. Mixed → no trade.</b> Two-of-three is not a setup, it's a maybe — and a maybe is a skip. Even a clean 3-of-3 inside 12–1 PM ET is still a skip.</p>
   </section>
 
   <section>
@@ -372,8 +446,62 @@
   });
   paint();
 
+  // ---- confluence check (live, per-entry — not persisted) ----
+  var votes = { ema: null, vwap: null, vp: null };
+  var sigRows = Array.prototype.slice.call(document.querySelectorAll("#conf .sig"));
+  var verdict = document.getElementById("verdict");
+  var vTag = document.getElementById("vTag");
+  var vSub = document.getElementById("vSub");
+
+  function paintVotes() {
+    sigRows.forEach(function (row) {
+      var s = row.getAttribute("data-s");
+      row.querySelectorAll(".vote").forEach(function (btn) {
+        btn.classList.toggle("on", votes[s] === btn.getAttribute("data-v"));
+      });
+    });
+  }
+  function paintVerdict() {
+    var vals = [votes.ema, votes.vwap, votes.vp];
+    var setN = vals.filter(Boolean).length;
+    var bulls = vals.filter(function (x) { return x === "bull"; }).length;
+    var bears = vals.filter(function (x) { return x === "bear"; }).length;
+    verdict.classList.remove("go", "halt", "idle");
+    if (setN < 3) {
+      verdict.classList.add("idle");
+      vTag.textContent = "Set all three";
+      var left = 3 - setN;
+      vSub.textContent = left + " signal" + (left > 1 ? "s" : "") + " to go.";
+    } else if (bulls === 3) {
+      verdict.classList.add("go");
+      vTag.textContent = "GO LONG ▲";
+      vSub.textContent = "3 of 3 aligned bullish. Size 1–5, know your stop.";
+    } else if (bears === 3) {
+      verdict.classList.add("go");
+      vTag.textContent = "GO SHORT ▼";
+      vSub.textContent = "3 of 3 aligned bearish. Size 1–5, know your stop.";
+    } else {
+      verdict.classList.add("halt");
+      vTag.textContent = "STAND DOWN";
+      vSub.textContent = "Signals disagree (" + bulls + " up / " + bears + " down). No trade — wait.";
+    }
+  }
+  sigRows.forEach(function (row) {
+    var s = row.getAttribute("data-s");
+    row.querySelectorAll(".vote").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var v = btn.getAttribute("data-v");
+        votes[s] = (votes[s] === v) ? null : v;
+        paintVotes(); paintVerdict();
+      });
+    });
+  });
+  function clearConf() { votes = { ema: null, vwap: null, vp: null }; paintVotes(); paintVerdict(); }
+  paintVotes(); paintVerdict();
+
   document.getElementById("reset").addEventListener("click", function () {
     checks = []; state.checks = []; save(state); paint();
+    clearConf();
   });
 })();
 </script>
