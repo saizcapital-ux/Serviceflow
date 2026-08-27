@@ -12,8 +12,10 @@ SHORT** live on your chart, then blocks your worst hour.
    below POC = bearish.** Anchor to the **session** open or the **last swing**.
 3. **VWAP position** — above VWAP = long bias, below = short bias. A valid long
    won’t fire below VWAP, and a short won’t fire above it.
-4. **Support / Resistance** — auto pivots (gold lines). A long wants to be **at
-   support / reclaiming** it; a short **at resistance / rejecting** it.
+4. **Support / Resistance** — auto pivots. Every pivot (high or low) is a level;
+   each is classed by where price is **now** — **green = support below price,
+   red = resistance above** — and roles flip as price trades through them. A long
+   wants to be **at support / reclaiming** it; a short **at resistance / rejecting** it.
 
 Volume spike and reward:risk complete a **6-point checklist**. Score **4+ with a
 trigger → TAKE IT**; under 4 → wait.
@@ -48,7 +50,7 @@ whole thesis agrees, so a mixed tape simply shows no label.
 | Blue / gold lines | 8 EMA / 21 EMA |
 | Purple line | VWAP |
 | Right-edge histogram + gold dotted line | Volume profile + POC |
-| Gold horizontal rays | Support / resistance pivots |
+| Green / red horizontal rays | Support (below price) / resistance (above) — pivot levels, recolored by current role |
 | Green **CALLS** / red **PUTS** label | Strict 3-of-3 gate — EMA + VWAP + Profile all agree |
 | ▲ LONG / ▼ SHORT | Trigger + 4/6 confluence, VWAP-aligned, outside no-trade |
 | △ / ▽ | A raw EMA cross that did **not** clear the checklist |

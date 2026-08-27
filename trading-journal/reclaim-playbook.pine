@@ -75,22 +75,23 @@ emaBear    = emaFast < emaSlow
 aboveVWAP = not useVWAP or close >= vwap
 belowVWAP = not useVWAP or close <= vwap
 
-// ---------------------------------------------- Pivot S/R levels (gold) -----
+// ---------------------------------------------- Pivot S/R levels ------------
+// Every confirmed pivot (high OR low) is one level. A level is SUPPORT when it
+// sits at/below price and RESISTANCE when at/above — roles flip as price moves
+// through them, which is how real S/R behaves. On the last bar each level is
+// recolored by its current role: green = support below, red = resistance above.
 gold = #d9a520
 ph = ta.pivothigh(pivLen, pivLen)
 pl = ta.pivotlow(pivLen, pivLen)
-var line[] resLines = array.new_line()
-var line[] supLines = array.new_line()
+var line[] lvlLines = array.new_line()
 if not na(ph)
-    ln = line.new(bar_index - pivLen, ph, bar_index, ph, color=color.new(gold, 0), width=1, extend=extend.right)
-    array.push(resLines, ln)
-    if array.size(resLines) > maxLvls
-        line.delete(array.shift(resLines))
+    array.push(lvlLines, line.new(bar_index - pivLen, ph, bar_index, ph, color=color.new(gold, 20), width=1, extend=extend.right))
+    if array.size(lvlLines) > maxLvls * 2
+        line.delete(array.shift(lvlLines))
 if not na(pl)
-    ln = line.new(bar_index - pivLen, pl, bar_index, pl, color=color.new(gold, 35), width=1, extend=extend.right)
-    array.push(supLines, ln)
-    if array.size(supLines) > maxLvls
-        line.delete(array.shift(supLines))
+    array.push(lvlLines, line.new(bar_index - pivLen, pl, bar_index, pl, color=color.new(gold, 20), width=1, extend=extend.right))
+    if array.size(lvlLines) > maxLvls * 2
+        line.delete(array.shift(lvlLines))
 
 f_below(arr) =>
     float best = na
@@ -108,10 +109,17 @@ f_above(arr) =>
             if lv >= close and (na(best) or lv < best)
                 best := lv
     best
-support    = f_below(supLines)
-resistance = f_above(resLines)
+support    = f_below(lvlLines)   // nearest level at/below price
+resistance = f_above(lvlLines)   // nearest level at/above price
 support    := na(support)    ? close - atr     : support
 resistance := na(resistance) ? close + 2 * atr : resistance
+
+// recolor each level by its CURRENT role (support green / resistance red)
+if barstate.islast and array.size(lvlLines) > 0
+    for i = 0 to array.size(lvlLines) - 1
+        ln = array.get(lvlLines, i)
+        y  = line.get_y1(ln)
+        line.set_color(ln, y <= close ? color.new(#26c85c, 20) : color.new(#e8635b, 20))
 
 // ------------------------------------ 2) Auto-anchored Volume Profile --------
 var int anchorBar = 0
