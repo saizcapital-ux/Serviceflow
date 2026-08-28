@@ -346,6 +346,7 @@ tbody tr:hover { background: var(--surface-2); }
 .cal-cell.week .cal-dnum { text-transform: uppercase; letter-spacing: .04em; font-size: 10.5px; color: var(--muted); }
 .cal-pnl { margin-top: auto; font-size: 19px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1.05; }
 .cal-sub { font-size: 11px; color: var(--text-secondary); margin-top: 2px; font-variant-numeric: tabular-nums; }
+.cal-low { font-size: 10.5px; font-weight: 600; color: var(--loss); opacity: .82; margin-top: 1px; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 @media (max-width: 560px) { .cal-pnl { font-size: 16px; } .cal-cell { min-height: 70px; } }
 
 /* ---- $100K roadmap ---- */

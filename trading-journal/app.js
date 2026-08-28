@@ -235,6 +235,18 @@
     list.forEach(t => { const o = dayMap.get(t.date) || { pnl: 0, n: 0 }; o.pnl += t.pnl; o.n++; dayMap.set(t.date, o); });
     if (!dayMap.size) { host.append(el("p", { class: "empty" }, "No trades in this view.")); return; }
 
+    // intraday low-water mark: the deepest the day's running realized total went,
+    // walking the day's trades in time order. Surfaces round-trips (down big, closed up).
+    const dayLow = new Map();
+    const byDayT = new Map();
+    list.forEach(t => { const a = byDayT.get(t.date) || []; a.push(t); byDayT.set(t.date, a); });
+    byDayT.forEach((arr, date) => {
+      arr.sort((a, b) => a.t < b.t ? -1 : 1);
+      let run = 0, lo = 0;
+      arr.forEach(t => { run += t.pnl; if (run < lo) lo = run; });
+      dayLow.set(date, lo);
+    });
+
     const toIdx = iso => { const [Y, M] = iso.split("-").map(Number); return Y * 12 + (M - 1); };
     const keys = [...dayMap.keys()].sort();
     const minIdx = toIdx(keys[0]), maxIdx = toIdx(keys[keys.length - 1]);
@@ -283,13 +295,17 @@
         if (!c) { grid.append(el("div", { class: "cal-cell out" })); continue; }
         if (!c.rec) { grid.append(el("div", { class: "cal-cell empty" }, [el("span", { class: "cal-dnum" }, String(c.day))])); continue; }
         const p = c.rec.pnl, pos = p >= 0;
-        const cell = el("div", { class: "cal-cell " + (pos ? "win" : "loss") }, [
+        const lo = dayLow.get(c.iso) || 0;
+        const dipped = lo < -30 && lo < p - 30;   // day round-tripped: went meaningfully red below where it closed
+        const kids = [
           el("span", { class: "cal-dnum" }, String(c.day)),
           el("div", { class: "cal-pnl " + cls(p) }, money0(p)),
           el("div", { class: "cal-sub" }, `${c.rec.n} trade${c.rec.n > 1 ? "s" : ""}`),
-        ]);
+        ];
+        if (dipped) kids.push(el("div", { class: "cal-low" }, `▼ ${money0(lo)} low`));
+        const cell = el("div", { class: "cal-cell " + (pos ? "win" : "loss") }, kids);
         cell.style.setProperty("--tint", (0.12 + 0.34 * Math.min(1, Math.abs(p) / maxAbs)).toFixed(3));
-        bindTT(cell, `<div class="h">${fmtDateY(c.iso)}</div><div class="r">Net P&L <b class="${cls(p)}">${moneyS(p)}</b></div><div class="r">Trades <b>${c.rec.n}</b></div>`);
+        bindTT(cell, `<div class="h">${fmtDateY(c.iso)}</div><div class="r">Net P&L <b class="${cls(p)}">${moneyS(p)}</b></div>` + (dipped ? `<div class="r">Intraday low <b class="neg">${moneyS(lo)}</b></div><div class="r">Recovered <b class="pos">+${money0(p - lo)}</b> off the low</div>` : "") + `<div class="r">Trades <b>${c.rec.n}</b></div>`);
         grid.append(cell);
       }
       const wt = el("div", { class: "cal-cell week " + (w.n ? cls(w.total) : "") }, [
