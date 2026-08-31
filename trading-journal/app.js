@@ -1086,6 +1086,22 @@
       ]));
     });
 
+    // ---- where the balance comes from: net deposits vs trading (exact identity) ----
+    // Balance = (deposits − withdrawals) + all-time trading P&L. We know the balance
+    // and the trading P&L exactly, so net contributions falls out and always reconciles.
+    const balNow = g.anchorEquity, tradeAll = meta.totalPnl, netIn = balNow - tradeAll;
+    const sMoney = v => (v < 0 ? "−" : "+") + "$" + Math.round(Math.abs(v)).toLocaleString("en-US");
+    const bd = $("#rmBreakdown"); bd.innerHTML = "";
+    bd.append(el("div", { class: "rm-bd-title" }, `Where your ${bigMoney(balNow)} comes from`));
+    const bdGrid = el("div", { class: "rm-bd-grid" });
+    [["Money you added", "net of withdrawals", sMoney(netIn), "pos"],
+     ["Trading P&L", "all-time, since 2024", sMoney(tradeAll), tradeAll >= 0 ? "pos" : "neg"],
+     ["Account value", "in the account now", bigMoney(balNow), "tot"]].forEach(([l, s, v, c]) =>
+      bdGrid.append(el("div", { class: "rm-bd-item " + c }, [
+        el("div", { class: "rm-bd-v" }, v), el("div", { class: "rm-bd-l" }, l), el("div", { class: "rm-bd-s" }, s)])));
+    bd.append(bdGrid);
+    bd.append(el("div", { class: "rm-bd-note" }, "“Money you added” is deposits minus withdrawals — the exact figure that reconciles your balance. To split gross deposits from gross withdrawals separately, tell me your total deposited to date (Robinhood doesn’t share transfer history with me)."));
+
     drawRoadmapChart({ anchor, deadline, Ntot, elapsed, live, target, curveVal, baseVal, avgDay, daysLeft, futureContrib, futureWithdraw, wd });
     const yourMonthly = avgDay * 21 / live;
     const flowClause = wd > 0
