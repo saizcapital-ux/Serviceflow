@@ -2,26 +2,26 @@
    Regenerate against fresh data with:  python ai_coach.py
    Figures are informational only, not tax or investment advice. */
 window.COACH = {
-  generatedAt: "2026-08-28",
+  generatedAt: "2026-08-31",
   model: "claude-opus-4-8",
-  grade: "Down lifetime — but 2026 is green and you're still turning it",
+  grade: "2026 is still green — but Aug 31 was the oversizing lesson, in full",
   verdict:
-    "The full record — 758 trades back to January 2024 — sits at −$1,245, and Aug 28 was a genuine bounce-back: +$470 on the day, 58% wins, and every trade in the morning window with nothing in the lunch hour. COIN, META and TSLA carried it. The 2026 year is back to +$2,061 and August closed as your best month on record at +$2,265. Here's the honest catch, though: size crept back up. You traded 10–15 lots today, and the single worst trade — HOOD −$435 — was a 15-lot. You made money anyway because the other big bets hit, but that's the exact trade-off that blew up 2024–25: oversizing pays until the one that doesn't wipes the day. Green is green, and stopping in the morning was right. Just notice the sizing — the milestones still say capping at 3 flips the whole career to +$507, and skipping 12–1pm ET takes it to +$3,368.",
+    "The full record — 780 trades back to January 2024 — sits at −$2,359, and Aug 31 is the reason: −$1,114 on the day, your worst session of the stretch, and it never recovered — the running total went straight down from the open and closed at its low. This is the exact thing the card warned about yesterday. You sized up to 10–20 lots, and the two biggest trades were the damage: PLTR −$829 across six oversized revenge fills, and a single 10-lot MSTR for −$420. Together that's more than the whole day's loss. One down day gave back over half of 2026's gains. It is not the end of anything — 2026 is still net +$947 and August still closed positive at +$1,151 — but be honest about what happened: this wasn't bad luck, it was size plus revenge, the 2024–25 pattern resurfacing. Capping at 3 would have turned this whole career loss into +$129; skipping 12–1pm ET makes it +$2,429. The tools work. Yesterday's win came from your reads; today's loss came from your size.",
   leaks: [
     { title: "The 1pm ET hour is catastrophic",
-      html: "Your 1:00pm ET hour is <b>−$3,351 over 77 trades at a 30% win rate</b>, and the full 12–1pm ET block is <b>−$4,733</b> — more than three times your entire lifetime loss lives in this one hour. <span class='impact'>Skipping 12–1pm ET flips your whole record from −$1,245 to +$3,368.</span>" },
+      html: "Your 1:00pm ET hour is <b>−$3,351 over 77 trades at a 30% win rate</b>, and the full 12–1pm ET block is <b>−$4,733</b>. <span class='impact'>Skipping 12–1pm ET flips your whole record from −$2,359 to +$2,429.</span>" },
     { title: "SPY is your account",
       html: "SPY is <b>−$3,717 across 370 trades</b> (39% win) — essentially your entire deficit, and still your most-traded symbol. Meanwhile SPCX is +$735 over 14 trades. <span class='impact'>Cutting SPY is the difference between red and black.</span>" },
-    { title: "Oversizing is creeping back",
-      html: "Your <b>79 trades of 10+ contracts are −$440</b> — and the tell is the tail: a 120-lot in 2024 and a 129-lot in June 2025 blew the original hole, and on Aug 28 a <b>15-lot HOOD lost −$435 in one trade</b> — the entire day's drawdown in a single oversized bet. Big size pays until it doesn't, and the one that doesn't costs you a day. <span class='impact'>Capping size at 3 still lifts the full record into the green at +$507.</span> When the year was cleanest you averaged 2.4 lots — get back to it." },
+    { title: "Oversizing just cost you a day",
+      html: "Your <b>95 trades of 10+ contracts are now −$1,454</b> — and Aug 31 is why the number jumped: <b>PLTR −$829 across six 10-lots</b> (a revenge run) and a <b>single 10-lot MSTR for −$420</b>. That's −$1,249 from oversizing in one session. Big size pays until it doesn't, and yesterday it didn't. <span class='impact'>Capping size at 3 turns the whole career loss into +$129 — a $2,488 swing.</span> When the year was cleanest you averaged 2.4 lots. This is the rule that matters most right now: get back to 1–5." },
     { title: "Overtrading churns the edge away",
       html: "Aug 26 is the whole lesson in one day: your first six trades made <b>+$366</b> (MRNA +$280, PLTR +$295, NVDA +$21) — a clean, bankable morning. Then you didn't stop. Fifteen more fills gave back <b>−$340</b>, headlined by a five-trade TSLA revenge run <b>−$480</b> in the 12–1pm ET lunch hour, and the day limped to <b>+$26</b>. A +$366 morning became a 21-trade round trip to nothing. <span class='impact'>Your edge is the morning; the churn after it is where profits die.</span> When you're up early, the correct next move is to close the laptop — not to hand it all back to the lunch chop." },
   ],
   plan: [
     { title: "Never trade 12–1pm ET again",
       html: "This is your single highest-value rule — a −$3,704 hour. Block it on your calendar. Nothing else moves the needle like avoiding the lunch chop." },
-    { title: "Keep size capped — the proof is your own 2026",
-      html: "At 2.4 lots average you're <b>net +$2,061 this year and +$2,265 in August</b>; your 79 big-lot trades are <b>−$440</b> and the worst single trades are all oversized. Small size isn't caution, it's what makes you profitable. 1–5 contracts, no exceptions — Aug 28's 15-lot HOOD (−$435) is the reminder." },
+    { title: "Get size back to 1–5 — this is the one",
+      html: "Even after Aug 31 you're <b>net +$947 this year</b>, but your 95 big-lot trades are <b>−$1,454</b> — the oversized trades are the entire problem. Aug 31's PLTR and MSTR 10-lots (−$1,249) prove it again. Small size isn't caution, it's what keeps you in the game. 1–5 contracts, no exceptions — and no averaging down a loser." },
     { title: "Cut SPY, lean into your edges",
       html: "SPY is a 39%-win, −$3,717 drain. Trade what actually works — SPCX (+$735 at 71%) and your best TSLA/AAPL reads — not the index on autopilot." },
     { title: "Fewer names, fewer trades",
@@ -30,11 +30,11 @@ window.COACH = {
       html: "The Discipline scorecard tells you whether these rules are sticking. You've made the hard change once; the work now is holding the line." },
   ],
   strengths: [
-    "The turnaround is real and measurable — 2026 is net +$2,061 and your last 100 trades are +$1,420; Aug 28 bounced back +$470.",
-    "August 2026 is your best month on record (+$2,265) — and Aug 28 proved you can recover a red streak with a disciplined morning.",
-    "You have genuine edges when you pick spots: SPCX +$735 at a 71% win rate.",
-    "Recognizing and correcting a two-year blow-up era is the hardest thing a trader does — and you did it.",
+    "Even after a −$1,114 day, 2026 is still net +$947 and August still closed positive (+$1,151). One bad day didn't undo the year.",
+    "When you hold size at 1–5, you win: capping at 3 turns the whole career green (+$129). The discipline is proven — it's the execution that slipped.",
+    "You have genuine edges when you pick spots: SPCX +$735 at a 71% win rate, and Aug 28's disciplined morning made +$470.",
+    "You survived the worst day of the stretch with the account intact and the account is still yours to grow. Recoverable — if the size comes down.",
   ],
   note:
-    "Grounded in your complete realized-trade history, Jan 2024 → Aug 28 2026. A behavioral read of your own data, not investment advice — validate every rule against your own results before trading it.",
+    "Grounded in your complete realized-trade history, Jan 2024 → Aug 31 2026. A behavioral read of your own data, not investment advice — validate every rule against your own results before trading it.",
 };
