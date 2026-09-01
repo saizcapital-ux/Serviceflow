@@ -1035,8 +1035,12 @@
     const wd = g.dailyWithdrawal || 0;                 // money taken out each trading day
     const totalWithdraw = wd * Ntot, futureWithdraw = wd * daysLeft;
 
-    // ---- live account value = base + trading P&L + deposits in − withdrawals out ----
-    const live = g.anchorEquity + (meta.totalPnl - g.anchorPnl) + toDate - wd * elapsed;
+    // ---- live account value = the true broker balance (anchor) + realized trading since ----
+    // The anchor is re-read from the real balance on every data refresh, so it already
+    // includes every deposit and withdrawal to date. We do NOT re-add scheduled deposits or
+    // placeholder withdrawals here — that would double-count and drift the marker above the
+    // real balance. Those projections belong only to the forward curve.
+    const live = g.anchorEquity + (meta.totalPnl - g.anchorPnl);
     const toGo = target - live, pctDone = Math.max(0, Math.min(1, live / target));
 
     // ---- solve the trading rate that (with deposits and withdrawals) reaches target ----
